@@ -79,3 +79,4 @@ Desktop.ini
 
 main/secrets.h
 sdkconfig*
+.vscode/c_cpp_properties.json
