@@ -7,10 +7,20 @@ idf_build_get_property(target IDF_TARGET)
 if(${target} STREQUAL "linux")
     list(APPEND requires esp_stubs protocol_examples_common)
 endif()
-idf_component_register(SRCS "main.c" "ticker_storage.c"
-                    INCLUDE_DIRS "."
-                    PRIV_REQUIRES ${requires}
-                    EMBED_TXTFILES howsmyssl_com_root_cert.pem
+idf_component_register(SRCS 
+                        "src/day_handler.c" 
+                        "src/main.c" 
+                        "src/ticker_storage.c"
+
+                    INCLUDE_DIRS 
+                        "include"
+
+                    PRIV_REQUIRES 
+                        ${requires}
+
+                    EMBED_TXTFILES 
+                        "certs/howsmyssl_com_root_cert.pem"
+                        
                     REQUIRES
                         cjson
                         esp32-st7789
