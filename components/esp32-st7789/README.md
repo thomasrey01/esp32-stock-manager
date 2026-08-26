@@ -1,3 +1,5 @@
+This component was taken from the st7789 libdriver library. It is slightly updated to integrate with the esp32 spi_bridge.
+
 # ST7789 Prototyping Library for ESP32 & ESP-IDF
 
 This library provides low-level support for interfacing

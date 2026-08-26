@@ -33,6 +33,7 @@
 #include "esp_system.h"
 
 #include "secrets.h"
+#include "ticker_storage.h"
 
 #include "esp_http_client.h"
 
@@ -41,6 +42,17 @@
 static const char *TAG = "HTTP_CLIENT";
 static const char *HANDLER_TAG = "HTTP_HANDLER";
 #define TICKER "AMZN"
+const char *ticker_json = "{\"tickers\": [\"AMZN\", \"QBTS\"]}";
+
+typedef enum {
+    STATE_INIT,
+    STATE_GET_TIME,
+    STATE_CHECK_MARKET,
+    STATE_FETCH_PRICE,
+    STATE_SAVE_NVS,
+    STATE_UPDATE_DISPLAY,
+    STATE_SLEEP,
+} market_state_t;
 
 char recv_buf[MAX_HTTP_RECV_BUFFER] = {0};
 
@@ -154,8 +166,6 @@ static void https_with_hostname_path(void)
             TICKER,
             API_KEY);
 
-    
-
     esp_http_client_config_t config = {
         .host = "api.massive.com",
         .path = path,
@@ -192,74 +202,8 @@ static void https_with_hostname_path(void)
  *  The easiest way is to use esp_http_perform()
  */
 
-// void fill_red(st7789_device_handle_t display)
-// {
-//     // 170 x 320
-//     uint16_t width = 32;
-//     uint16_t height = 32;
-
-//     uint16_t *buffer = malloc(width * height * sizeof(uint16_t));
-
-//     if (!buffer) {
-//         return;
-//     }
-
-//     // Fill framebuffer with black?
-//     for (int i = 0; i < width * height; i++) {
-//         buffer[i] = 0xFFFF;
-//     }
-
-//     for (int i = 0; i < 256; i += width) {
-//         for (int j = 0; j < 256; j += height) {
-//             st7789_paint(
-//             display,
-//             buffer,
-//             j,
-//             j+height,
-//             i,
-//             i+width
-//             );
-
-
-//         }
-        
-//     }
-
-//     free(buffer);
-// }
-
-
-static void http_test_task(void *pvParameters)
+static void handle_display()
 {
-    esp_err_t ret;
-    // https_with_hostname_path();
-    // const char *ticker_json = "{\"tickers\": [\"AMZN\"]}";
-    // ticker_storage_set(ticker_json);
-    // ret = ticker_storage_save(ticker_json);
-    // ticker_storage_init();
-
-
-    // ESP_LOGI(TAG, "SPI init result: %s\n", esp_err_to_name(err));
-
-
-    // st7789_params_t st1178_params = {
-    //     .host = SPI2_HOST,
-    //     .gpio_cs = GPIO_NUM_22,
-    //     .gpio_bckl = GPIO_NUM_23,
-    //     .gpio_dc = GPIO_NUM_19,
-    // };
-
-    // st7789_device_handle_t st7789_device_handle;
-    // st7789_device_handle = st7789_init(&st1178_params);
-
-    // st7789_backlight(st7789_device_handle, 1);
-
-    // st7789_dispon(st7789_device_handle);
-
-    // // vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-    // st7789_swreset(st7789_device_handle);
-
     st7789_handle_t st_handle = {
         .spi_init = spi_init,
         .spi_deinit = spi_denit,
@@ -313,9 +257,6 @@ static void http_test_task(void *pvParameters)
     err = st7789_write_string(&st_handle, 42, 50, "There", 6, 0x368F, ST7789_FONT_24);
     vTaskDelay(pdMS_TO_TICKS(120));
 
-    // err = st7789_fill_rect(&st_handle, 0, 0, 239, 239, 0xFFFF);
-    ESP_LOGI(TAG, "fill rect: %d", err);
-
     if (err != 0) {
         ESP_LOGE(TAG, "write failed with value: %d\n", err);
     } else {
@@ -323,6 +264,52 @@ static void http_test_task(void *pvParameters)
     }
 
     ESP_LOGI(TAG, "Finish http example");
+}
+
+static void http_test_task(void *pvParameters)
+{
+    esp_err_t err;
+    // https_with_hostname_path();
+
+    ticker_storage_init();
+
+    size_t len = TICKER_MAX_BUF;
+
+    err = ticker_storage_load(&len, TICKERS);
+
+    const char *ticker_str = ticker_storage_get(TICKERS);
+
+    ESP_LOGI(TAG, "Got ticker string: %s\n", ticker_str);
+
+    ticker_storage_set(ticker_json, TICKERS);
+    err = ticker_storage_save(TICKERS);
+
+    
+#if !CONFIG_IDF_TARGET_LINUX
+    vTaskDelete(NULL);
+#endif
+}
+
+static void market_task(void *pvParameters)
+{
+    market_state_t state = STATE_INIT;
+    for (;;) {
+        switch(state) {
+            case STATE_INIT:
+                
+                break;
+            case STATE_GET_TIME:
+                
+                break;
+            case STATE_CHECK_MARKET:
+                
+                break;
+
+            default:
+                break;
+        }
+    }
+
 #if !CONFIG_IDF_TARGET_LINUX
     vTaskDelete(NULL);
 #endif
@@ -350,6 +337,7 @@ void app_main(void)
 #if CONFIG_IDF_TARGET_LINUX
     http_test_task(NULL);
 #else
-    xTaskCreate(&http_test_task, "http_test_task", 8192, NULL, 5, NULL);
+    // xTaskCreate(&http_test_task, "http_test_task", 8192, NULL, 5, NULL);
+    xTaskCreate(&market_task, "market_task", 8192, NULL, 5, NULL);
 #endif
 }
