@@ -37,6 +37,9 @@
 
 #include "esp_http_client.h"
 
+#include "day_time_handler.h"
+#include "tests.h"
+
 #define MAX_HTTP_RECV_BUFFER 512
 #define MAX_HTTP_OUTPUT_BUFFER 2048
 static const char *TAG = "HTTP_CLIENT";
@@ -157,17 +160,18 @@ esp_err_t _http_event_handler(esp_http_client_event_t *evt)
     return ESP_OK;
 }
 
-static void https_with_hostname_path(void)
+static void https_with_hostname_path(const char* host, const char *path)
 {
-    char path[256];
 
-    snprintf(path, sizeof(path),
-            "/v2/aggs/ticker/%s/prev?adjusted=true&apiKey=%s",
-            TICKER,
-            API_KEY);
+    // snprintf(path, sizeof(path),
+    //         "/v2/aggs/ticker/%s/prev?adjusted=true&apiKey=%s",
+    //         TICKER,
+    //         API_KEY);
+
+    // url is: api.massive.com
 
     esp_http_client_config_t config = {
-        .host = "api.massive.com",
+        .host = host,
         .path = path,
         .transport_type = HTTP_TRANSPORT_OVER_SSL,
         .event_handler = _http_event_handler,
@@ -266,10 +270,15 @@ static void handle_display()
     ESP_LOGI(TAG, "Finish http example");
 }
 
-static void http_test_task(void *pvParameters)
+// Returns the json of ticker price
+/*
+    {"day": "DAY", "tickers": ["TICKER, ..."], "prices": {"TICKER1": ...}}
+    right now this is only getting the ticker lists...
+*/
+cJSON* get_ticker_json()
 {
     esp_err_t err;
-    // https_with_hostname_path();
+    cJSON *j = NULL;
 
     ticker_storage_init();
 
@@ -281,33 +290,124 @@ static void http_test_task(void *pvParameters)
 
     ESP_LOGI(TAG, "Got ticker string: %s\n", ticker_str);
 
+    j = cJSON_Parse(ticker_str);
+
+    ESP_LOGI(TAG, "JSON string: %s\n", cJSON_Print(j));
+
+    cJSON *tickers_item = cJSON_GetObjectItem(j, "tickers");
+
+    // if (cJSON_IsArray(item)) {
+    //     ESP_LOGI(TAG, "Is array of size %d\n", cJSON_GetArraySize(item));
+
+    //     ESP_LOGI(TAG, "%s\n", cJSON_Print(cJSON_GetArrayItem(item, 0)));
+    // }
+
+
+
     ticker_storage_set(ticker_json, TICKERS);
     err = ticker_storage_save(TICKERS);
 
-    
-#if !CONFIG_IDF_TARGET_LINUX
-    vTaskDelete(NULL);
-#endif
+    return j;
+}
+
+esp_err_t save_ticker_json(cJSON *day_current, cJSON *tickers, cJSON *prices)
+{
+
 }
 
 static void market_task(void *pvParameters)
 {
-    market_state_t state = STATE_INIT;
+    static market_state_t state = STATE_INIT;
+    char api_path[256];
+    cJSON *j = NULL;
+    cJSON *day = NULL;
+    cJSON *tickers = NULL;
+    cJSON *old_prices;
+    cJSON *new_prices;
+    cJSON *time_api_resp;
+    cJSON *stock_api_resp;
+    cJSON *day_current;
+    cJSON *time_current;
+    
+    cJSON *results_item;
+    double price_value;
+
     for (;;) {
         switch(state) {
             case STATE_INIT:
+
+                ESP_LOGI(TAG, "In INIT\n");
                 
+                j = get_ticker_json(); // fix this
+                day = cJSON_GetObjectItem(j, "day");
+                tickers = cJSON_GetObjectItem(j, "tickers");
+                old_prices = cJSON_GetObjectItem(j, "prices");
+
+                state = STATE_GET_TIME;
                 break;
             case STATE_GET_TIME:
-                
+                ESP_LOGI(TAG, "In GET TIME\n");
+                // First get current day
+                https_with_hostname_path("timeapi.io", "/api/v1/timezone/zone?timeZone=America\%2FNew_York");
+
+                ESP_LOGI(TAG, "Got time api response: %s\n", response.buffer);
+                time_api_resp = cJSON_ParseWithLength(response.buffer, response.length);
+                day_current = cJSON_GetObjectItem(j, "day_of_week");
+                time_current = cJSON_GetObjectItem(j, "local_time");
+
+                if (
+                    cJSON_IsNull(day) ||
+                    (
+                        get_day(cJSON_GetStringValue(day)) < get_day(cJSON_GetStringValue(day_current)) &&
+                        is_after_close(cJSON_GetStringValue(time_current))
+                    )
+                ) {
+                    state = STATE_CHECK_MARKET;
+                } else {
+                    state = STATE_SLEEP;
+                }
+
                 break;
             case STATE_CHECK_MARKET:
+
+                new_prices = cJSON_CreateObject();
+
+                for (int i = 0; i < cJSON_GetArraySize(tickers); i++) {
+
+                    char * ticker_str = cJSON_GetArrayItem(tickers, i)->string;
+                    
+                    snprintf(api_path, sizeof(api_path),
+                        "/v2/aggs/ticker/%s/prev?adjusted=true&apiKey=%s",
+                        ticker_str,
+                        API_KEY
+                    );
+
+                    ESP_LOGI(TAG, "getting path: %s\n", api_path);
+
+                    https_with_hostname_path("api.massive.com", api_path);
+
+                    stock_api_resp = cJSON_ParseWithLength(response.buffer, response.length);
+
+                    results_item = cJSON_GetObjectItem(stock_api_resp, "results");
+
+                    price_value = cJSON_GetObjectItem(cJSON_GetArrayItem(results_item, 0), "c")->valuedouble;
+
+                    ESP_LOGI(TAG, "Price of %s: %f\n", ticker_str, price_value);
+
+                    cJSON_Delete(stock_api_resp);
+
+                    cJSON_AddItemToObject(new_prices, ticker_str, cJSON_CreateNumber(price_value));
+
+                }
+
                 
                 break;
 
             default:
                 break;
         }
+
+        vTaskDelay(pdMS_TO_TICKS(2000));
     }
 
 #if !CONFIG_IDF_TARGET_LINUX
@@ -317,6 +417,11 @@ static void market_task(void *pvParameters)
 
 void app_main(void)
 {
+
+    // test_time_parse();
+
+    // goto STOP;
+
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
       ESP_ERROR_CHECK(nvs_flash_erase());
@@ -332,7 +437,7 @@ void app_main(void)
     //  * examples/protocols/README.md for more information about this function.
     //  */
     // ESP_ERROR_CHECK(example_connect());
-    ESP_LOGI(TAG, "Connected to AP, begin http example");
+    // ESP_LOGI(TAG, "Connected to AP, begin http example");
 
 #if CONFIG_IDF_TARGET_LINUX
     http_test_task(NULL);
@@ -340,4 +445,7 @@ void app_main(void)
     // xTaskCreate(&http_test_task, "http_test_task", 8192, NULL, 5, NULL);
     xTaskCreate(&market_task, "market_task", 8192, NULL, 5, NULL);
 #endif
+
+END:
+
 }

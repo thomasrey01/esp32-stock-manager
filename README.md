@@ -3,3 +3,9 @@
 # ESP Stock Manager
 
 Simple stock information display manager using the st7789.
+
+## TODO:
+
+- Change malloc behaviour of cJSON, use a static buffer instead of heap memory.
+- OTA update maybe?
+- 

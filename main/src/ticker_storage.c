@@ -43,7 +43,6 @@ esp_err_t ticker_storage_set(const char *json, storage_type_t type)
         return 1;
     }
 
-    ESP_LOGI("TICKER", "setting string to %s with size: %d", json, len);
     strncpy(storage[type], json, len);
     tickers[len] = '\0';
 
@@ -71,8 +70,6 @@ esp_err_t ticker_storage_load(size_t *len, storage_type_t type)
 esp_err_t ticker_storage_save(storage_type_t type)
 {
     nvs_handle_t handle;
-
-    ESP_LOGI("TICKER", "saving string: %s with length %d", storage[type], sizeof(tickers));
 
     ESP_ERROR_CHECK(
         nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle)

@@ -8,9 +8,10 @@ if(${target} STREQUAL "linux")
     list(APPEND requires esp_stubs protocol_examples_common)
 endif()
 idf_component_register(SRCS 
-                        "src/day_handler.c" 
+                        "src/day_time_handler.c" 
                         "src/main.c" 
                         "src/ticker_storage.c"
+                        "src/tests.c"
 
                     INCLUDE_DIRS 
                         "include"
