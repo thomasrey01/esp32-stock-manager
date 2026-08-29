@@ -36,6 +36,7 @@
 #include "ticker_storage.h"
 
 #include "esp_http_client.h"
+#include "esp_crt_bundle.h"
 
 #include "day_time_handler.h"
 #include "tests.h"
@@ -51,7 +52,6 @@ typedef enum {
     STATE_INIT,
     STATE_GET_TIME,
     STATE_CHECK_MARKET,
-    STATE_FETCH_PRICE,
     STATE_SAVE_NVS,
     STATE_UPDATE_DISPLAY,
     STATE_SLEEP,
@@ -176,10 +176,11 @@ static void https_with_hostname_path(const char* host, const char *path)
         .transport_type = HTTP_TRANSPORT_OVER_SSL,
         .event_handler = _http_event_handler,
         .cert_pem = howsmyssl_com_root_cert_pem_start,
+        .crt_bundle_attach = esp_crt_bundle_attach,
         .timeout_ms = 5000,
         .user_data = &response,
     };
-    ESP_LOGI(TAG, "HTTPS request with hostname and path =>");
+    ESP_LOGI(TAG, "HTTPS request with hostname and path => %s%s", host, path);
     esp_http_client_handle_t client = esp_http_client_init(&config);
     esp_err_t err = esp_http_client_perform(client);
 
@@ -272,15 +273,13 @@ static void handle_display()
 
 // Returns the json of ticker price
 /*
-    {"day": "DAY", "tickers": ["TICKER, ..."], "prices": {"TICKER1": ...}}
+    {"day": "DAY", "tickers": ["TICKER1", ..."], "prices": {"TICKER1": ...}}
     right now this is only getting the ticker lists...
 */
 cJSON* get_ticker_json()
 {
     esp_err_t err;
     cJSON *j = NULL;
-
-    ticker_storage_init();
 
     size_t len = TICKER_MAX_BUF;
 
@@ -296,22 +295,24 @@ cJSON* get_ticker_json()
 
     cJSON *tickers_item = cJSON_GetObjectItem(j, "tickers");
 
-    // if (cJSON_IsArray(item)) {
-    //     ESP_LOGI(TAG, "Is array of size %d\n", cJSON_GetArraySize(item));
 
-    //     ESP_LOGI(TAG, "%s\n", cJSON_Print(cJSON_GetArrayItem(item, 0)));
-    // }
-
-
-
-    ticker_storage_set(ticker_json, TICKERS);
-    err = ticker_storage_save(TICKERS);
+    // ticker_storage_set(ticker_json, TICKERS);
+    // err = ticker_storage_save(TICKERS);
 
     return j;
 }
 
-esp_err_t save_ticker_json(cJSON *day_current, cJSON *tickers, cJSON *prices)
+esp_err_t save_ticker_json(cJSON *j)
 {
+    esp_err_t err;
+
+    err = ticker_storage_set(cJSON_Print(j), PRICES);
+
+    ESP_ERROR_CHECK(err);
+
+    err = ticker_storage_save(PRICES);
+
+    return err;
 
 }
 
@@ -320,14 +321,14 @@ static void market_task(void *pvParameters)
     static market_state_t state = STATE_INIT;
     char api_path[256];
     cJSON *j = NULL;
-    cJSON *day = NULL;
+    char *day = NULL;
     cJSON *tickers = NULL;
     cJSON *old_prices;
     cJSON *new_prices;
     cJSON *time_api_resp;
     cJSON *stock_api_resp;
-    cJSON *day_current;
-    cJSON *time_current;
+    char *day_current = NULL;
+    char *time_current = NULL;
     
     cJSON *results_item;
     double price_value;
@@ -337,9 +338,11 @@ static void market_task(void *pvParameters)
             case STATE_INIT:
 
                 ESP_LOGI(TAG, "In INIT\n");
+
+                ticker_storage_init();
                 
                 j = get_ticker_json(); // fix this
-                day = cJSON_GetObjectItem(j, "day");
+                day = cJSON_GetStringValue(cJSON_GetObjectItem(j, "day"));
                 tickers = cJSON_GetObjectItem(j, "tickers");
                 old_prices = cJSON_GetObjectItem(j, "prices");
 
@@ -352,13 +355,14 @@ static void market_task(void *pvParameters)
 
                 ESP_LOGI(TAG, "Got time api response: %s\n", response.buffer);
                 time_api_resp = cJSON_ParseWithLength(response.buffer, response.length);
-                day_current = cJSON_GetObjectItem(j, "day_of_week");
-                time_current = cJSON_GetObjectItem(j, "local_time");
+                ESP_LOGI(TAG, "loaded json with length %d\n", response.length);
+                day_current = cJSON_GetStringValue(cJSON_GetObjectItem(time_api_resp, "day_of_week"));
+                time_current = cJSON_GetStringValue(cJSON_GetObjectItem(time_api_resp, "local_time"));
 
                 if (
-                    cJSON_IsNull(day) ||
+                    cJSON_IsNull(day) || cJSON_GetStringValue(day) == NULL ||
                     (
-                        get_day(cJSON_GetStringValue(day)) < get_day(cJSON_GetStringValue(day_current)) &&
+                        get_day(day) < get_day(day_current) &&
                         is_after_close(cJSON_GetStringValue(time_current))
                     )
                 ) {
@@ -367,14 +371,22 @@ static void market_task(void *pvParameters)
                     state = STATE_SLEEP;
                 }
 
+                cJSON_Delete(time_api_resp);
+
                 break;
+
             case STATE_CHECK_MARKET:
 
+                ESP_LOGI(TAG, "In check market\n");
+
                 new_prices = cJSON_CreateObject();
+                
 
                 for (int i = 0; i < cJSON_GetArraySize(tickers); i++) {
 
-                    char * ticker_str = cJSON_GetArrayItem(tickers, i)->string;
+                    char * ticker_str = cJSON_GetStringValue(cJSON_GetArrayItem(tickers, i));
+
+                    ESP_LOGI(TAG, "Getting ticker: %s\n", cJSON_Print(cJSON_GetArrayItem(tickers, i)));
                     
                     snprintf(api_path, sizeof(api_path),
                         "/v2/aggs/ticker/%s/prev?adjusted=true&apiKey=%s",
@@ -384,13 +396,16 @@ static void market_task(void *pvParameters)
 
                     ESP_LOGI(TAG, "getting path: %s\n", api_path);
 
+                    response.length = 0;
+                    response.buffer[0] = '\0';
+
                     https_with_hostname_path("api.massive.com", api_path);
 
                     stock_api_resp = cJSON_ParseWithLength(response.buffer, response.length);
 
                     results_item = cJSON_GetObjectItem(stock_api_resp, "results");
 
-                    price_value = cJSON_GetObjectItem(cJSON_GetArrayItem(results_item, 0), "c")->valuedouble;
+                    price_value = cJSON_GetNumberValue(cJSON_GetObjectItem(cJSON_GetArrayItem(results_item, 0), "c"));
 
                     ESP_LOGI(TAG, "Price of %s: %f\n", ticker_str, price_value);
 
@@ -400,9 +415,24 @@ static void market_task(void *pvParameters)
 
                 }
 
+                cJSON_AddItemToObject(new_prices, "day", day_current);
+                cJSON_AddItemToObject(new_prices, "tickers", tickers);
+
+                ESP_LOGI(TAG, "Got new_prices json: %s\n", cJSON_Print(new_prices));
+
+                save_ticker_json(new_prices);
+
                 
                 break;
 
+            case STATE_UPDATE_DISPLAY:
+                
+                break;
+
+            case STATE_SLEEP:
+                
+                
+                break;
             default:
                 break;
         }
@@ -437,7 +467,9 @@ void app_main(void)
     //  * examples/protocols/README.md for more information about this function.
     //  */
     // ESP_ERROR_CHECK(example_connect());
-    // ESP_LOGI(TAG, "Connected to AP, begin http example");
+    ESP_LOGI(TAG, "Connected to AP, begin http example");
+
+    handle_display();
 
 #if CONFIG_IDF_TARGET_LINUX
     http_test_task(NULL);
@@ -445,7 +477,5 @@ void app_main(void)
     // xTaskCreate(&http_test_task, "http_test_task", 8192, NULL, 5, NULL);
     xTaskCreate(&market_task, "market_task", 8192, NULL, 5, NULL);
 #endif
-
-END:
 
 }

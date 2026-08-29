@@ -78,6 +78,7 @@ Desktop.ini
 *.sln.docstates # Visual Studio
 
 main/secrets.h
-sdkconfig*
+sdkconfig.*
+sdkconfig
 .vscode/*
 .vscode
