@@ -8,7 +8,8 @@ if(${target} STREQUAL "linux")
     list(APPEND requires esp_stubs protocol_examples_common)
 endif()
 idf_component_register(SRCS 
-                        "src/day_time_handler.c" 
+                        "src/day_time_handler.c"
+                        "src/ui.c"
                         "src/main.c" 
                         "src/ticker_storage.c"
                         "src/tests.c"
@@ -25,4 +26,6 @@ idf_component_register(SRCS
                     REQUIRES
                         cjson
                         esp32-st7789
+                        lvgl
+                        esp_lvgl_port
                     )

@@ -19,14 +19,9 @@
 #include "protocol_examples_utils.h"
 #include "esp_tls.h"
 #include "cJSON.h"
-#include "driver_st7789.h"
 #if CONFIG_MBEDTLS_CERTIFICATE_BUNDLE
 #include "esp_crt_bundle.h"
 #endif
-
-#include "driver_st7789.h"
-#include "driver_st7789_font.h"
-#include "spi_bridge.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -37,6 +32,9 @@
 
 #include "esp_http_client.h"
 #include "esp_crt_bundle.h"
+
+#include "ui.h"
+#include "market.h"
 
 #include "day_time_handler.h"
 #include "tests.h"
@@ -207,69 +205,6 @@ static void https_with_hostname_path(const char* host, const char *path)
  *  The easiest way is to use esp_http_perform()
  */
 
-static void handle_display()
-{
-    st7789_handle_t st_handle = {
-        .spi_init = spi_init,
-        .spi_deinit = spi_denit,
-        .spi_write_cmd = spi_write_cmd,
-        .cmd_data_gpio_init = cmd_data_gpio_init,
-        .cmd_data_gpio_deinit = cmd_data_gpio_deinit,
-        .cmd_data_gpio_write = cmd_data_gpio_write,
-        .reset_gpio_init = reset_gpio_init,
-        .reset_gpio_deinit = reset_gpio_deinit,
-        .reset_gpio_write = reset_gpio_write,
-        .debug_print = debug_print,
-        .delay_ms = delay_ms,
-    };
-
-    uint8_t err = st7789_init(&st_handle);
-
-    if (err != 0) {
-        ESP_LOGE(TAG, "ST init failed with value: %d\n", err);
-    } else {
-        ESP_LOGI(TAG, "ST init successful\n");
-    }
-
-    st7789_set_column(&st_handle, 240);
-    st7789_set_row(&st_handle, 320);
-
-    gpio_set_level(PIN_NUM_BLK, 1);
-
-    err = st7789_sleep_out(&st_handle);
-    ESP_LOGI(TAG, "sleep out: %d", err);
-
-    vTaskDelay(pdMS_TO_TICKS(120));
-
-
-    err = st7789_set_interface_pixel_format(&st_handle, ST7789_RGB_INTERFACE_COLOR_FORMAT_65K, ST7789_CONTROL_INTERFACE_COLOR_FORMAT_16_BIT);
-
-    ESP_LOGI(TAG, "pixel format: %d", err);
-
-    err = st7789_set_memory_data_access_control(
-    &st_handle,
-    ST7789_ORDER_COLOR_RGB
-    );
-    ESP_LOGI(TAG, "MADCTL: %d", err);
-
-    err = st7789_display_on(&st_handle);
-    ESP_LOGI(TAG, "display on: %d", err);
-
-    st7789_clear(&st_handle);
-
-    err = st7789_write_string(&st_handle, 42, 32, "Hello", 5, 0x368F, ST7789_FONT_24);
-    vTaskDelay(pdMS_TO_TICKS(120));
-    err = st7789_write_string(&st_handle, 42, 50, "There", 6, 0x368F, ST7789_FONT_24);
-    vTaskDelay(pdMS_TO_TICKS(120));
-
-    if (err != 0) {
-        ESP_LOGE(TAG, "write failed with value: %d\n", err);
-    } else {
-        ESP_LOGI(TAG, "write successful\n");
-    }
-
-    ESP_LOGI(TAG, "Finish http example");
-}
 
 // Returns the json of ticker price
 /*
@@ -329,6 +264,7 @@ static void market_task(void *pvParameters)
     cJSON *stock_api_resp;
     char *day_current = NULL;
     char *time_current = NULL;
+    char * ticker_str = NULL;
     
     cJSON *results_item;
     double price_value;
@@ -360,10 +296,10 @@ static void market_task(void *pvParameters)
                 time_current = cJSON_GetStringValue(cJSON_GetObjectItem(time_api_resp, "local_time"));
 
                 if (
-                    cJSON_IsNull(day) || cJSON_GetStringValue(day) == NULL ||
+                    day == NULL ||
                     (
                         get_day(day) < get_day(day_current) &&
-                        is_after_close(cJSON_GetStringValue(time_current))
+                        is_after_close(time_current)
                     )
                 ) {
                     state = STATE_CHECK_MARKET;
@@ -384,7 +320,7 @@ static void market_task(void *pvParameters)
 
                 for (int i = 0; i < cJSON_GetArraySize(tickers); i++) {
 
-                    char * ticker_str = cJSON_GetStringValue(cJSON_GetArrayItem(tickers, i));
+                    ticker_str = cJSON_GetStringValue(cJSON_GetArrayItem(tickers, i));
 
                     ESP_LOGI(TAG, "Getting ticker: %s\n", cJSON_Print(cJSON_GetArrayItem(tickers, i)));
                     
@@ -415,7 +351,7 @@ static void market_task(void *pvParameters)
 
                 }
 
-                cJSON_AddItemToObject(new_prices, "day", day_current);
+                cJSON_AddItemToObject(new_prices, "day", cJSON_CreateString(day_current));
                 cJSON_AddItemToObject(new_prices, "tickers", tickers);
 
                 ESP_LOGI(TAG, "Got new_prices json: %s\n", cJSON_Print(new_prices));
@@ -426,11 +362,19 @@ static void market_task(void *pvParameters)
                 break;
 
             case STATE_UPDATE_DISPLAY:
-                
+                ESP_LOGI(TAG, "Updating display\n");
+                for (int i = 0; i < cJSON_GetArraySize(tickers); i++) {
+                    ticker_str = cJSON_GetArrayItem(tickers, i);
+                    
+                }
+
+                state = STATE_SLEEP;
                 break;
 
             case STATE_SLEEP:
                 
+                vTaskDelay(pdMS_TO_TICKS(1000 * 100));
+                state = STATE_GET_TIME;
                 
                 break;
             default:
@@ -447,10 +391,7 @@ static void market_task(void *pvParameters)
 
 void app_main(void)
 {
-
-    // test_time_parse();
-
-    // goto STOP;
+    char ip_addr_str[17];
 
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -458,24 +399,36 @@ void app_main(void)
       ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
+    ui_init();
+    ui_queue = xQueueCreate(5, sizeof(market_data_t));
 
-    // ESP_ERROR_CHECK(esp_netif_init());
-    // ESP_ERROR_CHECK(esp_event_loop_create_default());
+    ESP_ERROR_CHECK(esp_netif_init());
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
 
     // /* This helper function configures Wi-Fi or Ethernet, as selected in menuconfig.
     //  * Read "Establishing Wi-Fi or Ethernet Connection" section in
     //  * examples/protocols/README.md for more information about this function.
     //  */
-    // ESP_ERROR_CHECK(example_connect());
+    ESP_ERROR_CHECK(example_connect());
     ESP_LOGI(TAG, "Connected to AP, begin http example");
 
-    handle_display();
+    esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
 
+    if (netif == NULL) {
+        ESP_LOGE(TAG, "Could not get Wi-Fi STA netif");
+        return;
+    }
+
+    esp_netif_ip_info_t ip;
+    ESP_ERROR_CHECK(esp_netif_get_ip_info(netif, &ip));
+    snprintf(ip_addr_str, sizeof(ip_addr_str), IPSTR, IP2STR(&ip.ip));
+    ESP_LOGI(TAG, "ip_addr_str: %s\n", ip_addr_str);
+    ui_wifi_ready(ip_addr_str);
 #if CONFIG_IDF_TARGET_LINUX
     http_test_task(NULL);
 #else
-    // xTaskCreate(&http_test_task, "http_test_task", 8192, NULL, 5, NULL);
-    xTaskCreate(&market_task, "market_task", 8192, NULL, 5, NULL);
+    // xTaskCreate(&market_task, "market_task", 8192, NULL, 5, NULL);
+    xTaskCreate(&lvgl_task, "lvgl_task", 4096, NULL, 5, NULL);
 #endif
 
 }

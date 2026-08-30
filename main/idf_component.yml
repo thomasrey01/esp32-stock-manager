@@ -6,3 +6,5 @@ dependencies:
     rules:
     - if: target in [linux]
   espressif/cjson: '*'
+  espressif/esp_lvgl_port: ^2.9.0
+  lvgl/lvgl: ^9

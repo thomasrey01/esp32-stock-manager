@@ -4144,7 +4144,7 @@ uint8_t st7789_draw_picture_16bits(st7789_handle_t *handle, uint16_t left, uint1
         {
             for (j = 0; j < n; j += 2)                                             /* fill the buffer */
             {
-                color = image[(point % c) * r + (point / c)];                      /* set color */
+                color = image[(point % c) * r + (point / c)]; 
                 handle->buf[j] = (color >> 8) & 0xFF;                              /* set the color */
                 handle->buf[j + 1] = (color >> 0) & 0xFF;                          /* set the color */
                 point++;                                                           /* point++ */
