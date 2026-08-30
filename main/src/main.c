@@ -34,7 +34,6 @@
 #include "esp_crt_bundle.h"
 
 #include "ui.h"
-#include "market.h"
 
 #include "day_time_handler.h"
 #include "tests.h"
@@ -43,10 +42,12 @@
 #define MAX_HTTP_OUTPUT_BUFFER 2048
 static const char *TAG = "HTTP_CLIENT";
 static const char *HANDLER_TAG = "HTTP_HANDLER";
-#define TICKER "AMZN"
 const char *ticker_json = "{\"tickers\": [\"AMZN\", \"QBTS\"]}";
 
+#define ISDEBUG_FIRST 1
+
 typedef enum {
+    STATE_FIRST_TIME_INIT,
     STATE_INIT,
     STATE_GET_TIME,
     STATE_CHECK_MARKET,
@@ -68,6 +69,8 @@ http_response_t response = {
     .length = 0,
     .max_length = sizeof(recv_buf)
 };
+
+extern QueueSetHandle_t ui_queue;
 
 /* Root cert for howsmyssl.com, taken from howsmyssl_com_root_cert.pem
 
@@ -259,7 +262,7 @@ static void market_task(void *pvParameters)
     char *day = NULL;
     cJSON *tickers = NULL;
     cJSON *old_prices;
-    cJSON *new_prices;
+    cJSON *new_prices = NULL;
     cJSON *time_api_resp;
     cJSON *stock_api_resp;
     char *day_current = NULL;
@@ -271,6 +274,7 @@ static void market_task(void *pvParameters)
 
     for (;;) {
         switch(state) {
+
             case STATE_INIT:
 
                 ESP_LOGI(TAG, "In INIT\n");
@@ -292,11 +296,16 @@ static void market_task(void *pvParameters)
                 ESP_LOGI(TAG, "Got time api response: %s\n", response.buffer);
                 time_api_resp = cJSON_ParseWithLength(response.buffer, response.length);
                 ESP_LOGI(TAG, "loaded json with length %d\n", response.length);
-                day_current = cJSON_GetStringValue(cJSON_GetObjectItem(time_api_resp, "day_of_week"));
+                strcpy(
+                    day_current,
+                    cJSON_GetStringValue(cJSON_GetObjectItem(time_api_resp, "day_of_week"))
+                );
+                ESP_LOGI(TAG, "Current day: %s\n", day_current);
                 time_current = cJSON_GetStringValue(cJSON_GetObjectItem(time_api_resp, "local_time"));
+                ESP_LOGI(TAG, "Current time: %s\n", time_current);
 
                 if (
-                    day == NULL ||
+                    day == NULL || ISDEBUG_FIRST ||
                     (
                         get_day(day) < get_day(day_current) &&
                         is_after_close(time_current)
@@ -349,7 +358,11 @@ static void market_task(void *pvParameters)
 
                     cJSON_AddItemToObject(new_prices, ticker_str, cJSON_CreateNumber(price_value));
 
+                    vTaskDelay(pdMS_TO_TICKS(200));
                 }
+
+                ESP_LOGI(TAG, "Done getting data\n");
+                ESP_LOGI(TAG, "Saving day: %s\n", day_current);
 
                 cJSON_AddItemToObject(new_prices, "day", cJSON_CreateString(day_current));
                 cJSON_AddItemToObject(new_prices, "tickers", tickers);
@@ -358,22 +371,35 @@ static void market_task(void *pvParameters)
 
                 save_ticker_json(new_prices);
 
+                state = STATE_UPDATE_DISPLAY;
+
                 
                 break;
 
             case STATE_UPDATE_DISPLAY:
                 ESP_LOGI(TAG, "Updating display\n");
+                market_data_t market_data = {0};
                 for (int i = 0; i < cJSON_GetArraySize(tickers); i++) {
-                    ticker_str = cJSON_GetArrayItem(tickers, i);
-                    
+                    ticker_str = cJSON_GetStringValue(cJSON_GetArrayItem(tickers, i));
+                    strncpy(
+                        market_data.ticker,
+                        ticker_str,
+                        sizeof(market_data.ticker) - 1
+                    );
+
+                    market_data.price = cJSON_GetNumberValue(cJSON_GetObjectItem(new_prices, ticker_str));
+
+                    xQueueSend(ui_queue, &market_data, 0);
                 }
 
                 state = STATE_SLEEP;
                 break;
 
             case STATE_SLEEP:
+
+                ESP_LOGI(TAG, "In state sleep\n");
                 
-                vTaskDelay(pdMS_TO_TICKS(1000 * 100));
+                vTaskDelay(pdMS_TO_TICKS(1000 * 60));
                 state = STATE_GET_TIME;
                 
                 break;
@@ -430,5 +456,7 @@ void app_main(void)
     // xTaskCreate(&market_task, "market_task", 8192, NULL, 5, NULL);
     xTaskCreate(&lvgl_task, "lvgl_task", 4096, NULL, 5, NULL);
 #endif
+
+    test_display_labels();
 
 }

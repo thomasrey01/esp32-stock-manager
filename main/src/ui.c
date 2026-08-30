@@ -11,7 +11,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#include "market.h"
 
 #define DISPLAY_WIDTH   240
 #define DISPLAY_HEIGHT  320
@@ -27,6 +26,8 @@ static lv_display_t *display;
 static int num_tickers = 0;
 
 static uint16_t lvgl_buf[DISPLAY_WIDTH * LVGL_BUFFER_LINES];
+
+QueueSetHandle_t ui_queue;
 
 static void lvgl_flush_cb(
     lv_display_t *disp,
@@ -161,9 +162,57 @@ void ui_wifi_ready(const char *address)
 static void ui_process_message(void)
 {
     market_data_t market_data;
+    char price_str[10];
+    int posy = 30;
 
     while (xQueueReceive(ui_queue, &market_data, 0) == pdTRUE) {
-        lv_obj_t *stock = lv_label_create(lv_screen_active());
+        lv_obj_t *ticker_label = lv_label_create(lv_screen_active());
+        lv_obj_t *price_label = lv_label_create(lv_screen_active());
+
+        snprintf(price_str, sizeof(price_str), "$%.2f", (double)market_data.price);
+
+        lv_label_set_text(
+            price_label,
+            price_str
+        );
+
+        lv_obj_set_style_text_font(
+            price_label,
+            &lv_font_montserrat_24,
+            LV_PART_MAIN
+        );
+
+        lv_obj_set_style_text_color(
+            price_label,
+            lv_color_hex(0x07E0),
+            LV_PART_MAIN
+        );
+
+
+        ESP_LOGI(
+            TAG,
+            "Updating UI: %s %.2f",
+            market_data.ticker,
+            market_data.price
+        );
+
+        lv_label_set_text_fmt(
+            ticker_label,
+            "%s: ",
+            market_data.ticker
+        );
+
+        lv_obj_set_style_text_font(
+            ticker_label,
+            &lv_font_montserrat_24,
+            LV_PART_MAIN
+        );
+
+        lv_obj_set_pos(ticker_label, 50, posy);
+        lv_obj_set_pos(price_label, 90, posy+30);
+
+        posy += 60;
+
     }
 }
 
@@ -179,7 +228,6 @@ void lvgl_task(void *pvParameters)
 
         if (delay_ms < 5) delay_ms = 5;
 
-        ESP_LOGI(TAG, "Pausing for %d ms\n", delay_ms);
         vTaskDelay(pdMS_TO_TICKS(delay_ms));
     }
 }

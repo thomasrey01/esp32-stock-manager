@@ -3,5 +3,6 @@
 #include "esp_log.h"
 
 void test_time_parse();
+void test_display_labels();
 
 #endif

@@ -11,6 +11,5 @@ typedef struct {
     float percent;
 } market_data_t;
 
-QueueSetHandle_t ui_queue;
 
 #endif

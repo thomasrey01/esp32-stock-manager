@@ -4,6 +4,8 @@
 #define UI_H
 
 #include "esp_err.h"
+#include "market.h"
+
 
 esp_err_t ui_init(void);
 void set_num_tickers(int num);
