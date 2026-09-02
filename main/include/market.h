@@ -11,5 +11,4 @@ typedef struct {
     float percent;
 } market_data_t;
 
-
 #endif

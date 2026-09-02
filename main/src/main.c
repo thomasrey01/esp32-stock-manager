@@ -265,7 +265,7 @@ static void market_task(void *pvParameters)
     cJSON *new_prices = NULL;
     cJSON *time_api_resp;
     cJSON *stock_api_resp;
-    char *day_current = NULL;
+    char day_current[10];
     char *time_current = NULL;
     char * ticker_str = NULL;
     
@@ -292,15 +292,17 @@ static void market_task(void *pvParameters)
                 ESP_LOGI(TAG, "In GET TIME\n");
                 // First get current day
                 https_with_hostname_path("timeapi.io", "/api/v1/timezone/zone?timeZone=America\%2FNew_York");
-
                 ESP_LOGI(TAG, "Got time api response: %s\n", response.buffer);
+
                 time_api_resp = cJSON_ParseWithLength(response.buffer, response.length);
                 ESP_LOGI(TAG, "loaded json with length %d\n", response.length);
+                
                 strcpy(
                     day_current,
                     cJSON_GetStringValue(cJSON_GetObjectItem(time_api_resp, "day_of_week"))
                 );
                 ESP_LOGI(TAG, "Current day: %s\n", day_current);
+
                 time_current = cJSON_GetStringValue(cJSON_GetObjectItem(time_api_resp, "local_time"));
                 ESP_LOGI(TAG, "Current time: %s\n", time_current);
 
@@ -373,23 +375,23 @@ static void market_task(void *pvParameters)
 
                 state = STATE_UPDATE_DISPLAY;
 
-                
                 break;
 
             case STATE_UPDATE_DISPLAY:
                 ESP_LOGI(TAG, "Updating display\n");
-                market_data_t market_data = {0};
+                ui_message_t ui_message = {0};
                 for (int i = 0; i < cJSON_GetArraySize(tickers); i++) {
                     ticker_str = cJSON_GetStringValue(cJSON_GetArrayItem(tickers, i));
+                    ui_message.message_type = UI_MSG_MARKET;
                     strncpy(
-                        market_data.ticker,
+                        ui_message.market_data.ticker,
                         ticker_str,
-                        sizeof(market_data.ticker) - 1
+                        sizeof(ui_message.market_data.ticker) - 1
                     );
 
-                    market_data.price = cJSON_GetNumberValue(cJSON_GetObjectItem(new_prices, ticker_str));
+                    ui_message.market_data.price = cJSON_GetNumberValue(cJSON_GetObjectItem(new_prices, ticker_str));
 
-                    xQueueSend(ui_queue, &market_data, 0);
+                    xQueueSend(ui_queue, &ui_message, 0);
                 }
 
                 state = STATE_SLEEP;
@@ -417,7 +419,7 @@ static void market_task(void *pvParameters)
 
 void app_main(void)
 {
-    char ip_addr_str[17];
+    char ip_addr_str[20];
 
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -426,7 +428,7 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
     ui_init();
-    ui_queue = xQueueCreate(5, sizeof(market_data_t));
+    ui_queue = xQueueCreate(10, sizeof(ui_message_t));
 
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
@@ -453,10 +455,10 @@ void app_main(void)
 #if CONFIG_IDF_TARGET_LINUX
     http_test_task(NULL);
 #else
-    // xTaskCreate(&market_task, "market_task", 8192, NULL, 5, NULL);
+    xTaskCreate(&market_task, "market_task", 8192, NULL, 5, NULL);
     xTaskCreate(&lvgl_task, "lvgl_task", 4096, NULL, 5, NULL);
 #endif
 
-    test_display_labels();
+    // test_display_labels();
 
 }

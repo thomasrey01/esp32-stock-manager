@@ -156,62 +156,85 @@ void ui_wifi_ready(const char *address)
 
     lvgl_port_unlock();
 
+}
+
+void ui_update_market(market_data_t market_data, int posy)
+{
+    char price_str[10];
+
+    lv_obj_t *ticker_label = lv_label_create(lv_screen_active());
+    lv_obj_t *price_label = lv_label_create(lv_screen_active());
+
+    snprintf(price_str, sizeof(price_str), "$%.2f", (double)market_data.price);
+
+    lv_label_set_text(
+        price_label,
+        price_str
+    );
+
+    lv_obj_set_style_text_font(
+        price_label,
+        &lv_font_montserrat_24,
+        LV_PART_MAIN
+    );
+
+    lv_obj_set_style_text_color(
+        price_label,
+        lv_color_hex(0x07E0),
+        LV_PART_MAIN
+    );
+
+
+    ESP_LOGI(
+        TAG,
+        "Updating UI: %s %.2f",
+        market_data.ticker,
+        market_data.price
+    );
+
+    lv_label_set_text_fmt(
+        ticker_label,
+        "%s: ",
+        market_data.ticker
+    );
+
+    lv_obj_set_style_text_font(
+        ticker_label,
+        &lv_font_montserrat_24,
+        LV_PART_MAIN
+    );
+
+    lv_obj_set_pos(ticker_label, 50, posy);
+    lv_obj_set_pos(price_label, 90, posy+30);
+}
+
+void ui_update_clock(clock_data_t clock_data)
+{
 
 }
 
 static void ui_process_message(void)
 {
-    market_data_t market_data;
-    char price_str[10];
-    int posy = 30;
+    ui_message_t ui_message;
+    int posy = 30; 
 
-    while (xQueueReceive(ui_queue, &market_data, 0) == pdTRUE) {
-        lv_obj_t *ticker_label = lv_label_create(lv_screen_active());
-        lv_obj_t *price_label = lv_label_create(lv_screen_active());
+    while (xQueueReceive(ui_queue, &ui_message, 0) == pdTRUE) {
 
-        snprintf(price_str, sizeof(price_str), "$%.2f", (double)market_data.price);
+        switch (ui_message.message_type) {
+            case UI_MSG_MARKET:
+                ui_update_market(ui_message.market_data, posy);
+                posy += 60;
+                break;
+            
+            case UI_MSG_CLOCK:
+                ui_update_clock(ui_message.clock_data);
+                break;
 
-        lv_label_set_text(
-            price_label,
-            price_str
-        );
+            default:
+                break;
+        }
 
-        lv_obj_set_style_text_font(
-            price_label,
-            &lv_font_montserrat_24,
-            LV_PART_MAIN
-        );
-
-        lv_obj_set_style_text_color(
-            price_label,
-            lv_color_hex(0x07E0),
-            LV_PART_MAIN
-        );
-
-
-        ESP_LOGI(
-            TAG,
-            "Updating UI: %s %.2f",
-            market_data.ticker,
-            market_data.price
-        );
-
-        lv_label_set_text_fmt(
-            ticker_label,
-            "%s: ",
-            market_data.ticker
-        );
-
-        lv_obj_set_style_text_font(
-            ticker_label,
-            &lv_font_montserrat_24,
-            LV_PART_MAIN
-        );
-
-        lv_obj_set_pos(ticker_label, 50, posy);
-        lv_obj_set_pos(price_label, 90, posy+30);
-
-        posy += 60;
+        
 
     }
 }
