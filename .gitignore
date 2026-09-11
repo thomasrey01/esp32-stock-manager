@@ -41,8 +41,9 @@ managed_components/
 # If ESP-IDF tools are installed/referenced locally to the project
 .espressif/
 
-# dependencies
+# Dependencies
 dependencies.lock
+eim_config.toml
 
 # CMake generated files
 CMakeCache.txt

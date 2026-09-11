@@ -17,6 +17,8 @@
 
 #define LVGL_BUFFER_LINES  40
 
+#define NUM_SCREEN_OBJECTS 6
+
 st7789_handle_t st_handle;
 
 static const char *TAG = "UI";
@@ -28,6 +30,16 @@ static int num_tickers = 0;
 static uint16_t lvgl_buf[DISPLAY_WIDTH * LVGL_BUFFER_LINES];
 
 QueueSetHandle_t ui_queue;
+
+typedef enum {
+    OBJECT_STOCK1,
+    OBJECT_STOCK2,
+    OBJECT_STOCK3,
+    OBJECT_WIFI,
+    OBJECT_CLOCK
+} ui_obj_id_t;
+
+lv_obj_t* screen_objects[NUM_SCREEN_OBJECTS];
 
 static void lvgl_flush_cb(
     lv_display_t *disp,
@@ -141,7 +153,7 @@ static void ui_create_start_screen(void)
 }
 
 void ui_wifi_ready(const char *address)
-{
+{   
     lvgl_port_lock(0);
 
     lv_obj_t *screen = lv_screen_active();
@@ -210,7 +222,21 @@ void ui_update_market(market_data_t market_data, int posy)
 
 void ui_update_clock(clock_data_t clock_data)
 {
+    lv_obj_t *clock_obj = screen_objects[OBJECT_CLOCK];
+    
 
+}
+
+static void ui_create_objects(void)
+{
+    lvgl_port_lock(0);
+    lv_obj_t *screen = lv_screen_active();
+
+    screen_objects[OBJECT_STOCK1] = lv_label_create(screen);
+    screen_objects[OBJECT_STOCK2] = lv_label_create(screen);
+    screen_objects[OBJECT_STOCK3] = lv_label_create(screen);
+    screen_objects[OBJECT_CLOCK] = lv_label_create(screen);
+    screen_objects[OBJECT_WIFI] = lv_label_create(screen);
 }
 
 static void ui_process_message(void)
@@ -289,7 +315,9 @@ esp_err_t ui_init(void)
         lvgl_flush_cb
     );
 
-    ui_create_start_screen(); 
+    ui_create_start_screen();
+
+    ui_create_objects();
 
     return ESP_OK;
 }

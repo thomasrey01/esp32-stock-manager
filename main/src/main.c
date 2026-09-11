@@ -373,6 +373,8 @@ static void market_task(void *pvParameters)
 
                 save_ticker_json(new_prices);
 
+                cJSON_Delete(new_prices);
+
                 state = STATE_UPDATE_DISPLAY;
 
                 break;
