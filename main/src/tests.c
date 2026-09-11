@@ -27,39 +27,43 @@ void test_time_parse()
 
 void test_display_labels(void)
 {
-    market_data_t market_data = {0};
+    ui_message_t ui_message = {0};
     const char *ticker_str1 = "AMZN";
     const char *ticker_str2 = "QBTS";
     const char *ticker_str3 = "GOOG";
 
+    ui_message.message_type = UI_MSG_MARKET;
+
     strncpy(
-        market_data.ticker,
+        ui_message.market_data.ticker,
         ticker_str1,
-        sizeof(market_data.ticker) - 1
+        sizeof(ui_message.market_data.ticker) - 1
     );
 
-    market_data.price = 218.11;
+    ui_message.market_data.price = 218.11;
 
-    xQueueSend(ui_queue, &market_data, 0);
+    xQueueSend(ui_queue, &ui_message, 0);
 
     strncpy(
-        market_data.ticker,
+        ui_message.market_data.ticker,
         ticker_str2,
-        sizeof(market_data.ticker) - 1
+        sizeof(ui_message.market_data.ticker) - 1
     );
 
-    market_data.price = 14.28;
+    ui_message.market_data.price = 14.28;
 
-    xQueueSend(ui_queue, &market_data, 0);
+    xQueueSend(ui_queue, &ui_message, 0);
 
     strncpy(
-        market_data.ticker,
+        ui_message.market_data.ticker,
         ticker_str3,
-        sizeof(market_data.ticker) - 1
+        sizeof(ui_message.market_data.ticker) - 1
     );
 
-    market_data.price = 1073.92;
+    ui_message.market_data.price = 1073.92;
 
-    xQueueSend(ui_queue, &market_data, 0);
+    xQueueSend(ui_queue, &ui_message, 0);
+
+    ESP_LOGI(TAG, "display test done\n");
     
 }

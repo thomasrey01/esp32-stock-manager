@@ -45,6 +45,7 @@ static const char *HANDLER_TAG = "HTTP_HANDLER";
 const char *ticker_json = "{\"tickers\": [\"AMZN\", \"QBTS\"]}";
 
 #define ISDEBUG_FIRST 1
+#define DEBUG_NO_WIFI 0
 
 typedef enum {
     STATE_FIRST_TIME_INIT,
@@ -373,8 +374,6 @@ static void market_task(void *pvParameters)
 
                 save_ticker_json(new_prices);
 
-                cJSON_Delete(new_prices);
-
                 state = STATE_UPDATE_DISPLAY;
 
                 break;
@@ -384,6 +383,13 @@ static void market_task(void *pvParameters)
                 ui_message_t ui_message = {0};
                 for (int i = 0; i < cJSON_GetArraySize(tickers); i++) {
                     ticker_str = cJSON_GetStringValue(cJSON_GetArrayItem(tickers, i));
+
+                    ESP_LOGI(
+                        TAG,
+                        "Adding ticker: %s to message",
+                        ticker_str
+                    );
+
                     ui_message.message_type = UI_MSG_MARKET;
                     strncpy(
                         ui_message.market_data.ticker,
@@ -395,6 +401,8 @@ static void market_task(void *pvParameters)
 
                     xQueueSend(ui_queue, &ui_message, 0);
                 }
+
+                cJSON_Delete(new_prices);
 
                 state = STATE_SLEEP;
                 break;
@@ -411,13 +419,14 @@ static void market_task(void *pvParameters)
                 break;
         }
 
-        vTaskDelay(pdMS_TO_TICKS(2000));
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 
 #if !CONFIG_IDF_TARGET_LINUX
     vTaskDelete(NULL);
 #endif
 }
+
 
 void app_main(void)
 {
@@ -439,6 +448,10 @@ void app_main(void)
     //  * Read "Establishing Wi-Fi or Ethernet Connection" section in
     //  * examples/protocols/README.md for more information about this function.
     //  */
+
+    #if DEBUG_NO_WIFI
+        snprintf(ip_addr_str, sizeof(ip_addr_str), "127.0.0.1");
+    #else
     ESP_ERROR_CHECK(example_connect());
     ESP_LOGI(TAG, "Connected to AP, begin http example");
 
@@ -452,15 +465,25 @@ void app_main(void)
     esp_netif_ip_info_t ip;
     ESP_ERROR_CHECK(esp_netif_get_ip_info(netif, &ip));
     snprintf(ip_addr_str, sizeof(ip_addr_str), IPSTR, IP2STR(&ip.ip));
+
+    #endif
     ESP_LOGI(TAG, "ip_addr_str: %s\n", ip_addr_str);
     ui_wifi_ready(ip_addr_str);
+
 #if CONFIG_IDF_TARGET_LINUX
     http_test_task(NULL);
 #else
+
+    #if !DEBUG_NO_WIFI
     xTaskCreate(&market_task, "market_task", 8192, NULL, 5, NULL);
-    xTaskCreate(&lvgl_task, "lvgl_task", 4096, NULL, 5, NULL);
+
+    #else
+    test_display_labels();
+    // ui_test_colors();
+    #endif
+    xTaskCreate(&lvgl_task, "lvgl_task", 8192, NULL, 5, NULL);
+
 #endif
 
-    // test_display_labels();
 
 }

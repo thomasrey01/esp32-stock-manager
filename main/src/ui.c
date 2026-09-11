@@ -17,7 +17,9 @@
 
 #define LVGL_BUFFER_LINES  40
 
-#define NUM_SCREEN_OBJECTS 6
+#define NUM_SCREEN_OBJECTS 8
+
+#define NUM_STOCKS 3 // for now the display only supports 3 different stocks
 
 st7789_handle_t st_handle;
 
@@ -25,21 +27,26 @@ static const char *TAG = "UI";
 
 static lv_display_t *display;
 
-static int num_tickers = 0;
-
 static uint16_t lvgl_buf[DISPLAY_WIDTH * LVGL_BUFFER_LINES];
 
 QueueSetHandle_t ui_queue;
 
 typedef enum {
-    OBJECT_STOCK1,
-    OBJECT_STOCK2,
-    OBJECT_STOCK3,
+    OBJECT_STOCK_TICKER1,
+    OBJECT_STOCK_TICKER2,
+    OBJECT_STOCK_TICKER3,
+    OBJECT_STOCK_PRICE1,
+    OBJECT_STOCK_PRICE2,
+    OBJECT_STOCK_PRICE3,
     OBJECT_WIFI,
     OBJECT_CLOCK
 } ui_obj_id_t;
 
 lv_obj_t* screen_objects[NUM_SCREEN_OBJECTS];
+
+lv_obj_t* app_name;
+lv_obj_t* preload;
+lv_obj_t* wifi_status;
 
 static void lvgl_flush_cb(
     lv_display_t *disp,
@@ -132,19 +139,18 @@ static void ui_create_start_screen(void)
 {
     lvgl_port_lock(0);
 
-    lv_obj_t *app_name =
-        lv_label_create(lv_screen_active());
+    app_name = lv_label_create(lv_screen_active());
 
     lv_label_set_text(app_name, "ESP Stock \nManagement v1.0.0");
-
     lv_obj_center(app_name);
 
-    lv_obj_t *preload = lv_spinner_create(lv_screen_active());
+    preload = lv_spinner_create(lv_screen_active());
 
     lv_obj_set_size(preload, 40, 40);
     lv_obj_align(preload, LV_ALIGN_BOTTOM_LEFT, 40, 0);
 
-    lv_obj_t * wifi_status = lv_label_create(lv_screen_active());
+    wifi_status = lv_label_create(lv_screen_active());
+
     lv_label_set_text(wifi_status, "Connecting to \nwifi...");
     lv_obj_align(wifi_status, LV_ALIGN_BOTTOM_LEFT, 85, 0);
 
@@ -154,48 +160,30 @@ static void ui_create_start_screen(void)
 
 void ui_wifi_ready(const char *address)
 {   
+    ESP_LOGI(TAG, "Updating ip address to: %s\n", address);
+
     lvgl_port_lock(0);
 
-    lv_obj_t *screen = lv_screen_active();
-    lv_obj_clean(screen);
+    lv_obj_delete(app_name);
+    lv_obj_delete(preload);
+    lv_obj_delete(wifi_status);
 
-    lv_obj_t *wifi =
-        lv_label_create(screen);
+    lv_obj_t *wifi = screen_objects[OBJECT_WIFI];
 
     lv_label_set_text(wifi, address);
 
-    lv_obj_align(wifi, LV_ALIGN_BOTTOM_LEFT, 40, -5);
+    lv_obj_remove_flag(screen_objects[OBJECT_WIFI], LV_OBJ_FLAG_HIDDEN);
 
     lvgl_port_unlock();
 
 }
 
-void ui_update_market(market_data_t market_data, int posy)
+void ui_update_market(market_data_t market_data, int stock_idx)
 {
     char price_str[10];
 
-    lv_obj_t *ticker_label = lv_label_create(lv_screen_active());
-    lv_obj_t *price_label = lv_label_create(lv_screen_active());
-
-    snprintf(price_str, sizeof(price_str), "$%.2f", (double)market_data.price);
-
-    lv_label_set_text(
-        price_label,
-        price_str
-    );
-
-    lv_obj_set_style_text_font(
-        price_label,
-        &lv_font_montserrat_24,
-        LV_PART_MAIN
-    );
-
-    lv_obj_set_style_text_color(
-        price_label,
-        lv_color_hex(0x07E0),
-        LV_PART_MAIN
-    );
-
+    lv_obj_t *ticker_label = screen_objects[stock_idx];
+    lv_obj_t *price_label = screen_objects[stock_idx+NUM_STOCKS];
 
     ESP_LOGI(
         TAG,
@@ -204,26 +192,43 @@ void ui_update_market(market_data_t market_data, int posy)
         market_data.price
     );
 
+    snprintf(price_str, sizeof(price_str), "$%.2f", (double)market_data.price);
+
+    lvgl_port_lock(0);
+
+    lv_label_set_text(
+        price_label,
+        price_str
+    );
+
     lv_label_set_text_fmt(
         ticker_label,
         "%s: ",
         market_data.ticker
     );
 
-    lv_obj_set_style_text_font(
-        ticker_label,
-        &lv_font_montserrat_24,
-        LV_PART_MAIN
-    );
+    lv_obj_remove_flag(ticker_label, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(price_label, LV_OBJ_FLAG_HIDDEN);
 
-    lv_obj_set_pos(ticker_label, 50, posy);
-    lv_obj_set_pos(price_label, 90, posy+30);
+    lvgl_port_unlock();
+    
 }
 
 void ui_update_clock(clock_data_t clock_data)
 {
     lv_obj_t *clock_obj = screen_objects[OBJECT_CLOCK];
-    
+
+    lvgl_port_lock(0);
+
+    lv_label_set_text_fmt(
+        clock_obj,
+        "%.2d:%.2d:%.2d",
+        clock_data.hour,
+        clock_data.minute,
+        clock_data.second
+    );
+
+    lvgl_port_unlock();
 
 }
 
@@ -232,24 +237,67 @@ static void ui_create_objects(void)
     lvgl_port_lock(0);
     lv_obj_t *screen = lv_screen_active();
 
-    screen_objects[OBJECT_STOCK1] = lv_label_create(screen);
-    screen_objects[OBJECT_STOCK2] = lv_label_create(screen);
-    screen_objects[OBJECT_STOCK3] = lv_label_create(screen);
-    screen_objects[OBJECT_CLOCK] = lv_label_create(screen);
-    screen_objects[OBJECT_WIFI] = lv_label_create(screen);
+    int posy = 50;
+    int posx_ticker = 50;
+    int posx_price = 75;
+
+    for (int i = 0; i < NUM_SCREEN_OBJECTS; i++) {
+        screen_objects[i] = lv_label_create(screen);
+        lv_obj_add_flag(screen_objects[i], LV_OBJ_FLAG_HIDDEN);
+
+    }
+    
+    for (int i = 0; i < NUM_STOCKS; i++) {
+
+        lv_obj_set_pos(screen_objects[i], posx_ticker, posy);
+        lv_obj_set_pos(screen_objects[i+NUM_STOCKS], posx_price, posy+30);
+
+        posy += 60;
+
+        lv_obj_set_style_text_font(
+            screen_objects[i],
+            &lv_font_montserrat_24,
+            LV_PART_MAIN
+        );
+
+        lv_obj_set_style_text_color(
+            screen_objects[i],
+            lv_color_hex(0x07E0),
+            LV_PART_MAIN
+        );
+
+        lv_obj_set_style_text_font(
+            screen_objects[i+NUM_STOCKS],
+            &lv_font_montserrat_24,
+            LV_PART_MAIN
+        );
+
+        lv_obj_set_style_text_color(
+            screen_objects[i+NUM_STOCKS],
+            lv_color_hex(0x1e83),
+            LV_PART_MAIN
+        );
+    }
+
+    lv_obj_align(screen_objects[OBJECT_WIFI], LV_ALIGN_BOTTOM_LEFT, 40, -5);
+
+    lv_obj_align(screen_objects[OBJECT_CLOCK], LV_ALIGN_TOP_LEFT, 20, -5);
+
+    lvgl_port_unlock();
+    
 }
 
 static void ui_process_message(void)
 {
     ui_message_t ui_message;
-    int posy = 30; 
+    int stock_idx = 0; 
 
     while (xQueueReceive(ui_queue, &ui_message, 0) == pdTRUE) {
 
         switch (ui_message.message_type) {
             case UI_MSG_MARKET:
-                ui_update_market(ui_message.market_data, posy);
-                posy += 60;
+                ui_update_market(ui_message.market_data, stock_idx);
+                stock_idx++;
                 break;
             
             case UI_MSG_CLOCK:
@@ -259,8 +307,6 @@ static void ui_process_message(void)
             default:
                 break;
         }
-
-        
 
     }
 }
@@ -299,7 +345,6 @@ esp_err_t ui_init(void)
         return ESP_FAIL;
     }
 
-
     lv_display_set_color_format(display, LV_COLOR_FORMAT_RGB565);
 
     lv_display_set_buffers(
@@ -322,7 +367,41 @@ esp_err_t ui_init(void)
     return ESP_OK;
 }
 
-void set_num_tickers(int num)
+void ui_test_colors()
 {
-    num_tickers = num;
+    lvgl_port_lock(0);
+
+    lv_obj_t *screen = lv_screen_active();
+
+    lv_obj_t *red = lv_obj_create(screen);
+    lv_obj_t *green = lv_obj_create(screen);
+    lv_obj_t *blue = lv_obj_create(screen);
+
+    lv_obj_set_size(red, 60, 60);
+    lv_obj_set_size(green, 60, 60);
+    lv_obj_set_size(blue, 60, 60);
+
+    lv_obj_set_pos(red, 60, 60);
+    lv_obj_set_pos(green, 60, 120);
+    lv_obj_set_pos(blue, 60, 180);
+
+    lv_obj_set_style_bg_color(
+        red,
+        lv_color_hex(0x0FF000),
+        LV_PART_MAIN
+    );
+
+    lv_obj_set_style_bg_color(
+        green,
+        lv_color_hex(0x000FF0),
+        LV_PART_MAIN
+    );
+
+    lv_obj_set_style_bg_color(
+        blue,
+        lv_color_hex(0x00000F),
+        LV_PART_MAIN
+    );
+
+    lvgl_port_unlock();
 }
