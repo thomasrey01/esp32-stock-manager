@@ -13,6 +13,9 @@ idf_component_register(SRCS
                         "src/main.c" 
                         "src/ticker_storage.c"
                         "src/tests.c"
+                        "src/http.c"
+                        "src/time_task.c"
+                        "src/market_task.c"
 
                     INCLUDE_DIRS 
                         "include"

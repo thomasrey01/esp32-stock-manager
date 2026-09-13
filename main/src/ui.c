@@ -63,7 +63,8 @@ static void lvgl_flush_cb(
 
     st7789_set_column_address(&st_handle, area->x1, area->x2);
     st7789_set_row_address(&st_handle, area->y1, area->y2);
-    st7789_memory_write(&st_handle, (uint8_t *)pixels, pixel_count * 2);
+    // st7789_memory_write(&st_handle, (uint8_t *)pixels, pixel_count * 2);
+    st7789_memory_write(&st_handle, px_map, pixel_count * 2);
 
     lv_display_flush_ready(disp);
 }
@@ -119,6 +120,8 @@ static void init_display()
 
     st7789_clear(&st_handle);
 
+    st7789_display_inversion_on(&st_handle);
+
     err = st7789_write_string(&st_handle, 42, 32, "Hello", 5, 0x368F, ST7789_FONT_24);
     vTaskDelay(pdMS_TO_TICKS(120));
     err = st7789_write_string(&st_handle, 42, 50, "There", 6, 0x368F, ST7789_FONT_24);
@@ -171,6 +174,8 @@ void ui_wifi_ready(const char *address)
     lv_obj_t *wifi = screen_objects[OBJECT_WIFI];
 
     lv_label_set_text(wifi, address);
+
+    lv_obj_set_style_text_color(wifi, lv_color_hex(0xFFFFFF), 0);
 
     lv_obj_remove_flag(screen_objects[OBJECT_WIFI], LV_OBJ_FLAG_HIDDEN);
 
@@ -237,6 +242,12 @@ static void ui_create_objects(void)
     lvgl_port_lock(0);
     lv_obj_t *screen = lv_screen_active();
 
+    lv_obj_set_style_bg_color(
+        screen,
+        lv_color_hex(0x000000),
+        0
+    );
+
     int posy = 50;
     int posx_ticker = 50;
     int posx_price = 75;
@@ -274,7 +285,7 @@ static void ui_create_objects(void)
 
         lv_obj_set_style_text_color(
             screen_objects[i+NUM_STOCKS],
-            lv_color_hex(0x1e83),
+            lv_color_hex(0x00FF00),
             LV_PART_MAIN
         );
     }
@@ -385,23 +396,36 @@ void ui_test_colors()
     lv_obj_set_pos(green, 60, 120);
     lv_obj_set_pos(blue, 60, 180);
 
+    // lv_color_t
+
     lv_obj_set_style_bg_color(
         red,
-        lv_color_hex(0x0FF000),
+        lv_color_hex(0xFF0000),
         LV_PART_MAIN
     );
 
     lv_obj_set_style_bg_color(
         green,
-        lv_color_hex(0x000FF0),
+        lv_color_hex(0x00FF00),
         LV_PART_MAIN
     );
 
     lv_obj_set_style_bg_color(
         blue,
-        lv_color_hex(0x00000F),
+        lv_color_hex(0x0000FF),
         LV_PART_MAIN
     );
 
+    // lv_obj_set_style_bg_color(
+    //     lv_screen_active(),
+    //     lv_color_hex(0xFF0000),
+    //     0
+    // );
+
     lvgl_port_unlock();
+}
+
+void test_st7789_color()
+{
+    
 }

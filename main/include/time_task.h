@@ -7,4 +7,6 @@ typedef struct {
     int second;
 } clock_data_t;
 
+void time_task(void);
+
 #endif

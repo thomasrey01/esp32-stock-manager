@@ -36,6 +36,7 @@ uint8_t spi_init(void)
         .mode = 0,
         .spics_io_num = PIN_NUM_CS,
         .queue_size = 1,
+        .flags = 0
     };
 
 

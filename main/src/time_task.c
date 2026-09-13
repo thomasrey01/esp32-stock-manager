@@ -12,3 +12,7 @@ void set_system_time(time_t timestamp)
     settimeofday(&tv, NULL);
 }
 
+void time_task(void)
+{
+    
+}
