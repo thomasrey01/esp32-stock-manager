@@ -90,7 +90,7 @@ esp_err_t _http_event_handler(esp_http_client_event_t *evt)
     return ESP_OK;
 }
 
-void https_with_hostname_path(const char* host, const char *path)
+esp_err_t https_with_hostname_path(const char* host, const char *path)
 {
 
     // snprintf(path, sizeof(path),
@@ -130,4 +130,6 @@ void https_with_hostname_path(const char* host, const char *path)
         ESP_LOGE(TAG, "Error perform http request %s", esp_err_to_name(err));
     }
     esp_http_client_cleanup(client);
+
+    return err;
 }

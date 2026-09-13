@@ -1,31 +1,56 @@
 #include "tests.h"
 #include "day_time_handler.h"
-#include "market.h"
+#include "messages.h"
 #include "ui.h"
+#include "time_task.h"
 
 extern QueueSetHandle_t ui_queue;
+extern QueueSetHandle_t time_queue;
 
 const char *TAG = "TESTS";
 
 void test_time_parse()
 {
 
-    const char * str1 = "2026-08-26T22:44:34.103825+02:00"; // true
-    const char * str2 = "2026-08-26T16:44:34.103825+02:00"; // true
-    const char * str3 = "2026-08-26T17:01:34.103825+02:00"; // true
+    clock_data_t clock_data;
+
+    const char * str1 = "22:44:34.103825+02:00"; // true
+    const char * str2 = "16:44:34.103825+02:00"; // true
+    const char * str3 = "17:01:34.103825+02:00"; // true
     const char * str4 = "2026-08-26T16:01:34.103825+02:00"; // false
     const char * str5 = "2026-08-26T01:44:34.103825+02:00"; // false
     const char* str6 = "T1"; // false
 
-    ESP_LOGI(TAG, "test1: %d\n", is_after_close(str1));
-    ESP_LOGI(TAG, "test2: %d\n", is_after_close(str2));
-    ESP_LOGI(TAG, "test3: %d\n", is_after_close(str3));
-    ESP_LOGI(TAG, "test4: %d\n", is_after_close(str4));
-    ESP_LOGI(TAG, "test5: %d\n", is_after_close(str5));
-    ESP_LOGI(TAG, "test6: %d\n", is_after_close(str6));
+
+    parse_time(str1, &clock_data);
+
+    ESP_LOGI(TAG, "Current time: %d:%d:%d\n", 
+                clock_data.hour, 
+                clock_data.minute, 
+                clock_data.second
+        );
+
+    ESP_LOGI(TAG, "test1: %d\n", is_after_close(clock_data));
+    parse_time(str2, &clock_data);
+
+    ESP_LOGI(TAG, "Current time: %d:%d:%d\n", 
+                clock_data.hour, 
+                clock_data.minute, 
+                clock_data.second
+        );
+
+    ESP_LOGI(TAG, "test2: %d\n", is_after_close(clock_data));
+    parse_time(str3, &clock_data);
+    ESP_LOGI(TAG, "test3: %d\n", is_after_close(clock_data));
+    parse_time(str4, &clock_data);
+    ESP_LOGI(TAG, "test4: %d\n", is_after_close(clock_data));
+    parse_time(str5, &clock_data);
+    ESP_LOGI(TAG, "test5: %d\n", is_after_close(clock_data));
+    parse_time(str6, &clock_data);
+    ESP_LOGI(TAG, "test6: %d\n", is_after_close(clock_data));
 }
 
-void test_display_labels(void)
+void test_display_labels()
 {
     ui_message_t ui_message = {0};
     const char *ticker_str1 = "AMZN";
@@ -66,4 +91,16 @@ void test_display_labels(void)
 
     ESP_LOGI(TAG, "display test done\n");
     
+}
+
+void send_init_time()
+{
+    clock_data_t clock_data = {
+        .hour = 16,
+        .minute = 20,
+        .second = 10
+    };
+
+
+    xQueueSend(time_queue, &clock_data, 0);
 }

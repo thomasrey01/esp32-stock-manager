@@ -1,5 +1,7 @@
 #include "day_time_handler.h"
 
+static const char *TAG = "DAY_TIME_HANDLER";
+
 const char* days[NUM_TRADING_DAYS] = {
     "Monday",
     "Tuesday",
@@ -16,30 +18,29 @@ int get_day(const char* day_string)
     return -1;
 }
 
-// returns true if time is after 16:15 (to be safe)
-// this is so ugly
-bool is_after_close(const char* time_string)
+esp_err_t parse_time(const char* time_string, clock_data_t *clock_data)
 {
-    int idx = 0;
-    while (idx < strlen(time_string) && time_string[idx] != '.') {
-        if (time_string[idx] == 'T' && strlen(time_string) - idx > 4) {
-            if (time_string[idx+1] == '1') {
-                if (time_string[idx+2] == '6') {
-                    if (time_string[idx+4] == '1') {
-                        if (time_string[idx+5] >= '5') {
-                            return true;
-                        }
-                    } else if (time_string[idx+4] >= '2') {
-                        return true;
-                    }
-                } else if (time_string[idx+2] >= '7') {
-                    return true;
-                }
-            } else if (time_string[idx+1] == '2') {
-                return true;
-            }
-        }
-        idx++;
+    if (strlen(time_string) < 9) {
+        return ESP_FAIL;
     }
-    return false;
+
+    if (time_string[2] != ':' || time_string[5] != ':') {
+        ESP_LOGE(TAG, "Wrong time format: %s", time_string);
+        return ESP_FAIL;
+    }
+
+    clock_data->hour = (int)(time_string[0] - '0') * 10 + (int)(time_string[1] - '0');
+    clock_data->minute = (int)(time_string[3] - '0') * 10 + (int)(time_string[4] - '0');
+    clock_data->second = (int)(time_string[6] - '0') * 10 + (int)(time_string[7] - '0');
+
+    return ESP_OK;
+    
+}
+
+bool is_after_close(clock_data_t clock_data)
+{
+        return (
+            clock_data.hour >= 16 &&
+            clock_data.minute >= 15
+        );
 }

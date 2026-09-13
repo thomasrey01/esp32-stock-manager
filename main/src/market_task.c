@@ -2,7 +2,6 @@
 
 
 #define ISDEBUG_FIRST 1
-#define DEBUG_NO_WIFI 0
 
 typedef enum {
     STATE_FIRST_TIME_INIT,
@@ -10,13 +9,14 @@ typedef enum {
     STATE_GET_TIME,
     STATE_CHECK_MARKET,
     STATE_SAVE_NVS,
-    STATE_UPDATE_DISPLAY,
+    STATE_UPDATE_MARKET_DISPLAY,
     STATE_SLEEP,
 } market_state_t;
 
 
 extern http_response_t response;
 extern QueueSetHandle_t ui_queue;
+extern QueueSetHandle_t time_queue;
 
 static const char* TAG = "MARKET";
 
@@ -35,6 +35,10 @@ cJSON* get_ticker_json()
 
     err = ticker_storage_load(&len, TICKERS);
 
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error getting ticker. errno: %d\n", err);
+    }
+
     const char *ticker_str = ticker_storage_get(TICKERS);
 
     ESP_LOGI(TAG, "Got ticker string: %s\n", ticker_str);
@@ -42,12 +46,6 @@ cJSON* get_ticker_json()
     j = cJSON_Parse(ticker_str);
 
     ESP_LOGI(TAG, "JSON string: %s\n", cJSON_Print(j));
-
-    cJSON *tickers_item = cJSON_GetObjectItem(j, "tickers");
-
-
-    // ticker_storage_set(ticker_json, TICKERS);
-    // err = ticker_storage_save(TICKERS);
 
     return j;
 }
@@ -73,16 +71,23 @@ void market_task(void *pvParameters)
     cJSON *j = NULL;
     char *day = NULL;
     cJSON *tickers = NULL;
-    cJSON *old_prices;
+    cJSON *save_tickers = NULL;
     cJSON *new_prices = NULL;
     cJSON *time_api_resp;
     cJSON *stock_api_resp;
     char day_current[10];
     char *time_current = NULL;
     char * ticker_str = NULL;
+    bool successful_api;
     
     cJSON *results_item;
     double price_value;
+
+    ui_message_t ui_message = {0};
+    clock_data_t clock_data = {0};
+
+
+    esp_err_t err;
 
     for (;;) {
         switch(state) {
@@ -96,14 +101,20 @@ void market_task(void *pvParameters)
                 j = get_ticker_json(); // fix this
                 day = cJSON_GetStringValue(cJSON_GetObjectItem(j, "day"));
                 tickers = cJSON_GetObjectItem(j, "tickers");
-                old_prices = cJSON_GetObjectItem(j, "prices");
 
                 state = STATE_GET_TIME;
                 break;
             case STATE_GET_TIME:
                 ESP_LOGI(TAG, "In GET TIME\n");
                 // First get current day
-                https_with_hostname_path("timeapi.io", "/api/v1/timezone/zone?timeZone=America\%2FNew_York");
+                err = https_with_hostname_path("timeapi.io", "/api/v1/time/current/zone?timeZone=America\%2FNew_York");
+
+                if (err != ESP_OK) {
+                    ESP_LOGE(TAG, "Error getting time request with errno: %d\n", err);
+                    state = STATE_SLEEP;
+                    break;
+                }
+
                 ESP_LOGI(TAG, "Got time api response: %s\n", response.buffer);
 
                 time_api_resp = cJSON_ParseWithLength(response.buffer, response.length);
@@ -115,20 +126,35 @@ void market_task(void *pvParameters)
                 );
                 ESP_LOGI(TAG, "Current day: %s\n", day_current);
 
-                time_current = cJSON_GetStringValue(cJSON_GetObjectItem(time_api_resp, "local_time"));
-                ESP_LOGI(TAG, "Current time: %s\n", time_current);
+                err = parse_time(cJSON_GetStringValue(cJSON_GetObjectItem(time_api_resp, "time")), &clock_data);
+
+                if (err != ESP_OK) {
+                    ESP_LOGE(TAG, "Failed to parse time string with errno: %d", err);
+                    state = STATE_SLEEP;
+                    break;
+                }
+
+                xQueueSend(time_queue, &clock_data, 0);
+
+                ESP_LOGI(TAG, "Current time: %.2d:%.2d:%.2d\n", 
+                                clock_data.hour, 
+                                clock_data.minute, 
+                                clock_data.second
+                        );
 
                 if (
                     day == NULL || ISDEBUG_FIRST ||
                     (
                         get_day(day) < get_day(day_current) &&
-                        is_after_close(time_current)
+                        is_after_close(clock_data)
                     )
                 ) {
                     state = STATE_CHECK_MARKET;
                 } else {
                     state = STATE_SLEEP;
                 }
+
+
 
                 cJSON_Delete(time_api_resp);
 
@@ -139,6 +165,8 @@ void market_task(void *pvParameters)
                 ESP_LOGI(TAG, "In check market\n");
 
                 new_prices = cJSON_CreateObject();
+
+                successful_api = true;
                 
 
                 for (int i = 0; i < cJSON_GetArraySize(tickers); i++) {
@@ -153,7 +181,14 @@ void market_task(void *pvParameters)
                         API_KEY
                     );
 
-                    ESP_LOGI(TAG, "getting path: %s\n", api_path);                    https_with_hostname_path("api.massive.com", api_path);
+                    ESP_LOGI(TAG, "getting path: %s\n", api_path);                   
+                    err = https_with_hostname_path("api.massive.com", api_path);
+
+                    if (err != ESP_OK) {
+                        ESP_LOGE(TAG, "Error getting time request with errno: %d\n", err);
+                        successful_api = false;
+                    }
+
 
                     stock_api_resp = cJSON_ParseWithLength(response.buffer, response.length);
 
@@ -170,23 +205,24 @@ void market_task(void *pvParameters)
                     vTaskDelay(pdMS_TO_TICKS(200));
                 }
 
+                if (!successful_api) break;
+
                 ESP_LOGI(TAG, "Done getting data\n");
                 ESP_LOGI(TAG, "Saving day: %s\n", day_current);
 
                 cJSON_AddItemToObject(new_prices, "day", cJSON_CreateString(day_current));
-                cJSON_AddItemToObject(new_prices, "tickers", tickers);
+                cJSON_AddItemReferenceToObject(new_prices, "tickers", tickers);
 
                 ESP_LOGI(TAG, "Got new_prices json: %s\n", cJSON_Print(new_prices));
 
                 save_ticker_json(new_prices);
 
-                state = STATE_UPDATE_DISPLAY;
+                state = STATE_UPDATE_MARKET_DISPLAY;
 
                 break;
 
-            case STATE_UPDATE_DISPLAY:
+            case STATE_UPDATE_MARKET_DISPLAY:
                 ESP_LOGI(TAG, "Updating display\n");
-                ui_message_t ui_message = {0};
                 for (int i = 0; i < cJSON_GetArraySize(tickers); i++) {
                     ticker_str = cJSON_GetStringValue(cJSON_GetArrayItem(tickers, i));
 

@@ -16,7 +16,7 @@
 #define MAX_HTTP_RECV_BUFFER 512
 #define MAX_HTTP_OUTPUT_BUFFER 2048
 
-void https_with_hostname_path(const char* host, const char* path);
+esp_err_t https_with_hostname_path(const char* host, const char* path);
 
 typedef struct {
     char *buffer;

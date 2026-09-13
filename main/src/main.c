@@ -31,11 +31,13 @@
 #include "day_time_handler.h"
 #include "tests.h"
 
+#define DEBUG_NO_WIFI 0
+
 static const char *TAG = "MAIN";
 
 
 extern QueueSetHandle_t ui_queue;
-
+extern QueueSetHandle_t time_queue;
 
 void app_main(void)
 {
@@ -49,6 +51,7 @@ void app_main(void)
     ESP_ERROR_CHECK(ret);
     ui_init();
     ui_queue = xQueueCreate(10, sizeof(ui_message_t));
+    time_queue = xQueueCreate(1, sizeof(clock_data_t));
 
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
@@ -88,10 +91,11 @@ void app_main(void)
 
     #else
     test_display_labels();
+    send_init_time();
     // ui_test_colors();
     #endif
     xTaskCreate(&lvgl_task, "lvgl_task", 8192, NULL, 5, NULL);
-    // xTaskCreate(&time_task, "clock_task", 8192, NULL, 5, NULL);
+    xTaskCreate(&time_task, "clock_task", 8192, NULL, 5, NULL);
 
 #endif
 

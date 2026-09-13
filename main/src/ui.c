@@ -178,6 +178,7 @@ void ui_wifi_ready(const char *address)
     lv_obj_set_style_text_color(wifi, lv_color_hex(0xFFFFFF), 0);
 
     lv_obj_remove_flag(screen_objects[OBJECT_WIFI], LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(screen_objects[OBJECT_CLOCK], LV_OBJ_FLAG_HIDDEN);
 
     lvgl_port_unlock();
 
@@ -292,7 +293,19 @@ static void ui_create_objects(void)
 
     lv_obj_align(screen_objects[OBJECT_WIFI], LV_ALIGN_BOTTOM_LEFT, 40, -5);
 
-    lv_obj_align(screen_objects[OBJECT_CLOCK], LV_ALIGN_TOP_LEFT, 20, -5);
+    lv_obj_align(screen_objects[OBJECT_CLOCK], LV_ALIGN_TOP_LEFT, 40, 10);
+
+    lv_obj_set_style_text_font(
+        screen_objects[OBJECT_CLOCK],
+        &lv_font_montserrat_18,
+        LV_PART_MAIN
+    );
+
+    lv_obj_set_style_text_color(
+        screen_objects[OBJECT_CLOCK],
+        lv_color_hex(0x80fff9),
+        LV_PART_MAIN
+    );
 
     lvgl_port_unlock();
     

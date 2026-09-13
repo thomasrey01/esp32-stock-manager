@@ -1,12 +1,10 @@
 #ifndef TIME_TASK_H 
 #define TIME_TASK_H
 
-typedef struct {
-    int hour;
-    int minute;
-    int second;
-} clock_data_t;
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "messages.h"
 
-void time_task(void);
+void time_task(void *pvParameters);
 
 #endif
