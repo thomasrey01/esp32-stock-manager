@@ -104,3 +104,49 @@ void send_init_time()
 
     xQueueSend(time_queue, &clock_data, 0);
 }
+
+void send_cpu_stats()
+{
+    cpu_stats_t cpu_stats;
+    ui_message_t ui_message = {
+        .message_type = UI_MSG_CPU
+    };
+
+    cpu_stats.cpu0 = 98;
+    cpu_stats.cpu1 = 45;
+    cpu_stats.avg = 0;
+
+    ui_message.cpu_stats = cpu_stats;
+
+    xQueueSend(ui_queue, &ui_message, 0);
+
+    vTaskDelay(1000);
+
+    cpu_stats.cpu0 = 10;
+    cpu_stats.cpu1 = 10;
+    cpu_stats.avg = 10;
+
+    ui_message.cpu_stats = cpu_stats;
+
+    xQueueSend(ui_queue, &ui_message, 0);
+
+    vTaskDelay(1000);
+
+    cpu_stats.cpu0 = 100;
+    cpu_stats.cpu1 = 100;
+    cpu_stats.avg = 100;
+
+    ui_message.cpu_stats = cpu_stats;
+
+    xQueueSend(ui_queue, &ui_message, 0);
+
+    vTaskDelay(1000);
+
+    cpu_stats.cpu0 = 50;
+    cpu_stats.cpu1 = 45;
+    cpu_stats.avg = 48;
+
+    ui_message.cpu_stats = cpu_stats;
+
+    xQueueSend(ui_queue, &ui_message, 0);
+}

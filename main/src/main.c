@@ -24,6 +24,7 @@
 #include "ticker_storage.h"
 
 #include "market_task.h"
+#include "profile_task.h"
 
 #include "ui.h"
 #include "http.h"
@@ -32,6 +33,7 @@
 #include "tests.h"
 
 #define DEBUG_NO_WIFI 0
+#define DEBUG_NO_PROFILER 0
 
 static const char *TAG = "MAIN";
 
@@ -95,9 +97,14 @@ void app_main(void)
     // ui_test_colors();
     #endif
     xTaskCreate(&lvgl_task, "lvgl_task", 8192, NULL, 5, NULL);
-    xTaskCreate(&time_task, "clock_task", 8192, NULL, 5, NULL);
+    xTaskCreate(&time_task, "clock_task", 8192, NULL, 6, NULL);
 
+    #if DEBUG_NO_PROFILER
+    send_cpu_stats();
+    #else
+    xTaskCreate(&profile_task, "profile_task", 4096, NULL, 7, NULL);
+
+    #endif
 #endif
-
 
 }

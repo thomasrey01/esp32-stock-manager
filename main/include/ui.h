@@ -5,6 +5,7 @@
 
 #include "esp_err.h"
 #include "messages.h"
+#include <stdlib.h>
 
 esp_err_t ui_init(void);
 void set_num_tickers(int num);

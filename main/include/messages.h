@@ -2,9 +2,9 @@
 #define MESSAGES_H
 
 typedef struct {
-    int hour;
-    int minute;
-    int second;
+    uint8_t hour;
+    uint8_t minute;
+    uint8_t second;
 } clock_data_t;
 
 typedef struct {
@@ -14,9 +14,16 @@ typedef struct {
     float percent;
 } market_data_t;
 
+typedef struct {
+    uint8_t cpu0;
+    uint8_t cpu1;
+    uint8_t avg;
+} cpu_stats_t;
+
 typedef enum {
     UI_MSG_CLOCK,
-    UI_MSG_MARKET
+    UI_MSG_MARKET,
+    UI_MSG_CPU,
 } ui_message_type_t;
 
 typedef struct ui_message {
@@ -24,7 +31,7 @@ typedef struct ui_message {
 
     union {
         clock_data_t clock_data;
-
+        cpu_stats_t cpu_stats;
         market_data_t market_data;
     };
 } ui_message_t;

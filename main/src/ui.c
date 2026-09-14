@@ -17,7 +17,7 @@
 
 #define LVGL_BUFFER_LINES  40
 
-#define NUM_SCREEN_OBJECTS 8
+#define NUM_SCREEN_OBJECTS 11
 
 #define NUM_STOCKS 3 // for now the display only supports 3 different stocks
 
@@ -39,7 +39,10 @@ typedef enum {
     OBJECT_STOCK_PRICE2,
     OBJECT_STOCK_PRICE3,
     OBJECT_WIFI,
-    OBJECT_CLOCK
+    OBJECT_CLOCK,
+    OBJECT_CPU_STATS1,
+    OBJECT_CPU_STATS2,
+    OBJECT_CPU_STATS3,
 } ui_obj_id_t;
 
 lv_obj_t* screen_objects[NUM_SCREEN_OBJECTS];
@@ -179,6 +182,10 @@ void ui_wifi_ready(const char *address)
 
     lv_obj_remove_flag(screen_objects[OBJECT_WIFI], LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(screen_objects[OBJECT_CLOCK], LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(screen_objects[OBJECT_CPU_STATS1], LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(screen_objects[OBJECT_CPU_STATS2], LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(screen_objects[OBJECT_CPU_STATS3], LV_OBJ_FLAG_HIDDEN);
+    
 
     lvgl_port_unlock();
 
@@ -218,6 +225,51 @@ void ui_update_market(market_data_t market_data, int stock_idx)
 
     lvgl_port_unlock();
     
+}
+
+void ui_update_cpu(cpu_stats_t cpu_stats)
+{
+    char* cpu_labels[] = {"cpu0", "cpu1", "avg"};
+    lv_obj_t* cpu_obj;
+    uint8_t red = 0;
+    uint8_t green = 0;
+    uint32_t color;
+    
+    lvgl_port_lock(0);
+
+
+    for (uint8_t i = 0; i < 3; i++) {
+        cpu_obj = screen_objects[OBJECT_CPU_STATS1+i];
+        uint8_t cpu_val = *((uint8_t *)&cpu_stats + i);
+
+        if (cpu_val <= 50) {
+            green = UINT8_MAX;
+            red = cpu_val * (UINT8_MAX / 50);
+        } else {
+            red = UINT8_MAX;
+            green = (100 - cpu_val) * (UINT8_MAX / 50);
+        }
+
+        color = ((uint32_t)red << 16) + ((uint16_t)green << 8);
+
+        lv_label_set_text_fmt(
+            cpu_obj,
+            "%s: %u%%",
+            cpu_labels[i],
+            cpu_val
+        );
+
+        lv_obj_set_style_text_color(
+            cpu_obj,
+            lv_color_hex(color),
+            LV_PART_MAIN
+        );
+
+    }
+
+    lvgl_port_unlock();
+
+
 }
 
 void ui_update_clock(clock_data_t clock_data)
@@ -307,6 +359,24 @@ static void ui_create_objects(void)
         LV_PART_MAIN
     );
 
+    for (uint8_t i = 0; i < 3; i++) {
+        lv_obj_t* cpu_obj = screen_objects[OBJECT_CPU_STATS1 + i];
+        lv_obj_align(cpu_obj, LV_ALIGN_BOTTOM_RIGHT, -40, -50 + i * (20));
+
+        lv_obj_set_style_text_font(
+            cpu_obj,
+            &lv_font_montserrat_16,
+            LV_PART_MAIN
+        );
+
+        lv_obj_set_style_text_color(
+            cpu_obj,
+            lv_color_hex(0xFFFFFF),
+            LV_PART_MAIN
+        );
+    }
+    
+
     lvgl_port_unlock();
     
 }
@@ -326,6 +396,10 @@ static void ui_process_message(void)
             
             case UI_MSG_CLOCK:
                 ui_update_clock(ui_message.clock_data);
+                break;
+
+            case UI_MSG_CPU:
+                ui_update_cpu(ui_message.cpu_stats);
                 break;
 
             default:

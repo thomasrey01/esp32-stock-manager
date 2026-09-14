@@ -16,6 +16,7 @@ idf_component_register(SRCS
                         "src/http.c"
                         "src/time_task.c"
                         "src/market_task.c"
+                        "src/profile_task.c"
 
                     INCLUDE_DIRS 
                         "include"
