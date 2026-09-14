@@ -202,10 +202,13 @@ void market_task(void *pvParameters)
 
                     cJSON_AddItemToObject(new_prices, ticker_str, cJSON_CreateNumber(price_value));
 
-                    vTaskDelay(pdMS_TO_TICKS(200));
+                    vTaskDelay(pdMS_TO_TICKS(400));
                 }
 
-                if (!successful_api) break;
+                if (!successful_api) {
+                    vTaskDelay(pdMS_TO_TICKS(2000));
+                    break;
+                }
 
                 ESP_LOGI(TAG, "Done getting data\n");
                 ESP_LOGI(TAG, "Saving day: %s\n", day_current);

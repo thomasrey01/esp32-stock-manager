@@ -17,7 +17,7 @@
 
 #define LVGL_BUFFER_LINES  40
 
-#define NUM_SCREEN_OBJECTS 11
+#define NUM_SCREEN_OBJECTS 12
 
 #define NUM_STOCKS 3 // for now the display only supports 3 different stocks
 
@@ -38,11 +38,12 @@ typedef enum {
     OBJECT_STOCK_PRICE1,
     OBJECT_STOCK_PRICE2,
     OBJECT_STOCK_PRICE3,
-    OBJECT_WIFI,
+    OBJECT_IP_ADDRESS,
     OBJECT_CLOCK,
     OBJECT_CPU_STATS1,
     OBJECT_CPU_STATS2,
     OBJECT_CPU_STATS3,
+    OBJECT_WIFI_STATUS,
 } ui_obj_id_t;
 
 lv_obj_t* screen_objects[NUM_SCREEN_OBJECTS];
@@ -149,6 +150,7 @@ static void ui_create_start_screen(void)
 
     lv_label_set_text(app_name, "ESP Stock \nManagement v1.0.0");
     lv_obj_center(app_name);
+    lv_obj_set_style_text_color(app_name, lv_color_hex(0xFFFFFDF), LV_PART_MAIN);
 
     preload = lv_spinner_create(lv_screen_active());
 
@@ -159,6 +161,8 @@ static void ui_create_start_screen(void)
 
     lv_label_set_text(wifi_status, "Connecting to \nwifi...");
     lv_obj_align(wifi_status, LV_ALIGN_BOTTOM_LEFT, 85, 0);
+    lv_obj_set_style_text_color(wifi_status, lv_color_hex(0xFFFFFDF), LV_PART_MAIN);
+
 
     lvgl_port_unlock();
 
@@ -174,17 +178,18 @@ void ui_wifi_ready(const char *address)
     lv_obj_delete(preload);
     lv_obj_delete(wifi_status);
 
-    lv_obj_t *wifi = screen_objects[OBJECT_WIFI];
+    lv_obj_t *ip_address = screen_objects[OBJECT_IP_ADDRESS];
 
-    lv_label_set_text(wifi, address);
+    lv_label_set_text(ip_address, address);
 
-    lv_obj_set_style_text_color(wifi, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_text_color(ip_address, lv_color_hex(0xFFFFFF), 0);
 
-    lv_obj_remove_flag(screen_objects[OBJECT_WIFI], LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(screen_objects[OBJECT_IP_ADDRESS], LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(screen_objects[OBJECT_CLOCK], LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(screen_objects[OBJECT_CPU_STATS1], LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(screen_objects[OBJECT_CPU_STATS2], LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(screen_objects[OBJECT_CPU_STATS3], LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(screen_objects[OBJECT_WIFI_STATUS], LV_OBJ_FLAG_HIDDEN);
     
 
     lvgl_port_unlock();
@@ -290,6 +295,34 @@ void ui_update_clock(clock_data_t clock_data)
 
 }
 
+void ui_update_wifi_status(int8_t wifi_data)
+{
+    int color;
+    if (wifi_data == 1) {
+        color = 0xbababa;
+    } else if (wifi_data > -50) {
+        color = 0xFFFFFF;
+    } else if (wifi_data > -60) {
+        color = 0xfffd94;
+    } else if (wifi_data > -75) {
+        color = 0xffbe00;
+    } else {
+        color = 0xff3200;
+    }
+
+    lvgl_port_lock(0);
+
+    lv_obj_set_style_text_color(
+        screen_objects[OBJECT_WIFI_STATUS],
+        lv_color_hex(color),
+        LV_PART_MAIN
+    );
+
+    lvgl_port_unlock();
+
+
+}
+
 static void ui_create_objects(void)
 {
     lvgl_port_lock(0);
@@ -343,7 +376,7 @@ static void ui_create_objects(void)
         );
     }
 
-    lv_obj_align(screen_objects[OBJECT_WIFI], LV_ALIGN_BOTTOM_LEFT, 40, -5);
+    lv_obj_align(screen_objects[OBJECT_IP_ADDRESS], LV_ALIGN_BOTTOM_LEFT, 40, -5);
 
     lv_obj_align(screen_objects[OBJECT_CLOCK], LV_ALIGN_TOP_LEFT, 40, 10);
 
@@ -361,7 +394,7 @@ static void ui_create_objects(void)
 
     for (uint8_t i = 0; i < 3; i++) {
         lv_obj_t* cpu_obj = screen_objects[OBJECT_CPU_STATS1 + i];
-        lv_obj_align(cpu_obj, LV_ALIGN_BOTTOM_RIGHT, -40, -50 + i * (20));
+        lv_obj_align(cpu_obj, LV_ALIGN_BOTTOM_RIGHT, -40, -70 + i * (20));
 
         lv_obj_set_style_text_font(
             cpu_obj,
@@ -375,11 +408,23 @@ static void ui_create_objects(void)
             LV_PART_MAIN
         );
     }
-    
 
+    lv_obj_align(screen_objects[OBJECT_WIFI_STATUS], LV_ALIGN_TOP_RIGHT, -40, 10);
+    
+    lv_obj_set_style_text_font(
+        screen_objects[OBJECT_WIFI_STATUS],
+        &lv_font_montserrat_16,
+        LV_PART_MAIN
+    );
+
+    lv_label_set_text(screen_objects[OBJECT_WIFI_STATUS], LV_SYMBOL_WIFI);
+
+        
+    // lv_label_set_text(screen_objects[OBJECT_WIFI_STATUS], "WiFi");
     lvgl_port_unlock();
     
 }
+
 
 static void ui_process_message(void)
 {
@@ -387,6 +432,12 @@ static void ui_process_message(void)
     int stock_idx = 0; 
 
     while (xQueueReceive(ui_queue, &ui_message, 0) == pdTRUE) {
+
+        // ESP_LOGI(
+        //     TAG,
+        //     "Got message of type: %d\n",
+        //     ui_message.message_type
+        // );
 
         switch (ui_message.message_type) {
             case UI_MSG_MARKET:
@@ -400,6 +451,10 @@ static void ui_process_message(void)
 
             case UI_MSG_CPU:
                 ui_update_cpu(ui_message.cpu_stats);
+                break;
+
+            case UI_MSG_WIFI_STATUS:
+                ui_update_wifi_status(ui_message.wifi_data);
                 break;
 
             default:
@@ -463,56 +518,4 @@ esp_err_t ui_init(void)
     ui_create_objects();
 
     return ESP_OK;
-}
-
-void ui_test_colors()
-{
-    lvgl_port_lock(0);
-
-    lv_obj_t *screen = lv_screen_active();
-
-    lv_obj_t *red = lv_obj_create(screen);
-    lv_obj_t *green = lv_obj_create(screen);
-    lv_obj_t *blue = lv_obj_create(screen);
-
-    lv_obj_set_size(red, 60, 60);
-    lv_obj_set_size(green, 60, 60);
-    lv_obj_set_size(blue, 60, 60);
-
-    lv_obj_set_pos(red, 60, 60);
-    lv_obj_set_pos(green, 60, 120);
-    lv_obj_set_pos(blue, 60, 180);
-
-    // lv_color_t
-
-    lv_obj_set_style_bg_color(
-        red,
-        lv_color_hex(0xFF0000),
-        LV_PART_MAIN
-    );
-
-    lv_obj_set_style_bg_color(
-        green,
-        lv_color_hex(0x00FF00),
-        LV_PART_MAIN
-    );
-
-    lv_obj_set_style_bg_color(
-        blue,
-        lv_color_hex(0x0000FF),
-        LV_PART_MAIN
-    );
-
-    // lv_obj_set_style_bg_color(
-    //     lv_screen_active(),
-    //     lv_color_hex(0xFF0000),
-    //     0
-    // );
-
-    lvgl_port_unlock();
-}
-
-void test_st7789_color()
-{
-    
 }

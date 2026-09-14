@@ -17,6 +17,7 @@ idf_component_register(SRCS
                         "src/time_task.c"
                         "src/market_task.c"
                         "src/profile_task.c"
+                        "src/wifi_signal_task.c"
 
                     INCLUDE_DIRS 
                         "include"
@@ -32,4 +33,5 @@ idf_component_register(SRCS
                         esp32-st7789
                         lvgl
                         esp_lvgl_port
+                        esp_wifi
                     )

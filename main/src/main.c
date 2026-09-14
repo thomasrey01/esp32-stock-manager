@@ -25,6 +25,7 @@
 
 #include "market_task.h"
 #include "profile_task.h"
+#include "wifi_signal_task.h"
 
 #include "ui.h"
 #include "http.h"
@@ -90,10 +91,10 @@ void app_main(void)
 
     #if !DEBUG_NO_WIFI
     xTaskCreate(&market_task, "market_task", 8192, NULL, 5, NULL);
-
+    xTaskCreate(&wifi_signal_task, "wifi_signal_task", 2048, NULL, 5, NULL);
     #else
     test_display_labels();
-    send_init_time();
+    send_init_time();    
     // ui_test_colors();
     #endif
     xTaskCreate(&lvgl_task, "lvgl_task", 8192, NULL, 5, NULL);
@@ -103,6 +104,10 @@ void app_main(void)
     send_cpu_stats();
     #else
     xTaskCreate(&profile_task, "profile_task", 4096, NULL, 7, NULL);
+    #endif
+
+    #if DEBUG_NO_WIFI
+    send_wifi_status();
 
     #endif
 #endif

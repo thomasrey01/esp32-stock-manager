@@ -150,3 +150,36 @@ void send_cpu_stats()
 
     xQueueSend(ui_queue, &ui_message, 0);
 }
+
+void send_wifi_status()
+{
+    ui_message_t ui_message = {
+        .message_type = UI_MSG_WIFI_STATUS
+    };
+    uint8_t wifi_strength;
+
+    wifi_strength = 100;
+
+    ui_message.wifi_data = wifi_strength;
+
+    xQueueSend(ui_queue, &ui_message, 0);
+
+    vTaskDelay(pdMS_TO_TICKS(5000));
+
+    wifi_strength = 0;
+
+    ui_message.wifi_data = wifi_strength;
+
+    xQueueSend(ui_queue, &ui_message, 0);
+
+    vTaskDelay(pdMS_TO_TICKS(1000));
+
+    wifi_strength = 100;
+
+    ui_message.wifi_data = wifi_strength;
+
+    xQueueSend(ui_queue, &ui_message, 0);
+
+    vTaskDelay(pdMS_TO_TICKS(1000));
+
+}
