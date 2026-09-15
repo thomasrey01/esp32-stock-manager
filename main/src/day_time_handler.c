@@ -37,10 +37,9 @@ esp_err_t parse_time(const char* time_string, clock_data_t *clock_data)
     
 }
 
-bool is_after_close(clock_data_t clock_data)
+bool is_market_open(clock_data_t clock_data)
 {
-        return (
-            clock_data.hour >= 16 &&
-            clock_data.minute >= 15
-        );
+    bool market_open = (clock_data.hour >= 9 && clock_data.minute >= 30) || (clock_data.hour >= 10);
+    market_open = market_open && (clock_data.hour <= 16);
+    return market_open;
 }

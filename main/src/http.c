@@ -110,6 +110,7 @@ esp_err_t https_with_hostname_path(const char* host, const char *path)
         .event_handler = _http_event_handler,
         .cert_pem = howsmyssl_com_root_cert_pem_start,
         .crt_bundle_attach = esp_crt_bundle_attach,
+        .user_agent = "Mozilla/5.0",
         .timeout_ms = 5000,
         .user_data = &response,
     };

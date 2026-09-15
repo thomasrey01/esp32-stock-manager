@@ -38,9 +38,9 @@
 
 static const char *TAG = "MAIN";
 
-
 extern QueueSetHandle_t ui_queue;
 extern QueueSetHandle_t time_queue;
+EventGroupHandle_t wifi_event_group;
 
 void app_main(void)
 {
@@ -55,44 +55,19 @@ void app_main(void)
     ui_init();
     ui_queue = xQueueCreate(10, sizeof(ui_message_t));
     time_queue = xQueueCreate(1, sizeof(clock_data_t));
+    wifi_event_group = xEventGroupCreate();  
 
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-
-    // /* This helper function configures Wi-Fi or Ethernet, as selected in menuconfig.
-    //  * Read "Establishing Wi-Fi or Ethernet Connection" section in
-    //  * examples/protocols/README.md for more information about this function.
-    //  */
-
-    #if DEBUG_NO_WIFI
-        snprintf(ip_addr_str, sizeof(ip_addr_str), "127.0.0.1");
-    #else
-    ESP_ERROR_CHECK(example_connect());
-    ESP_LOGI(TAG, "Connected to AP, begin http example");
-
-    esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
-
-    if (netif == NULL) {
-        ESP_LOGE(TAG, "Could not get Wi-Fi STA netif");
-        return;
-    }
-
-    esp_netif_ip_info_t ip;
-    ESP_ERROR_CHECK(esp_netif_get_ip_info(netif, &ip));
-    snprintf(ip_addr_str, sizeof(ip_addr_str), IPSTR, IP2STR(&ip.ip));
-
-    #endif
-    ESP_LOGI(TAG, "ip_addr_str: %s\n", ip_addr_str);
-    ui_wifi_ready(ip_addr_str);
 
 #if CONFIG_IDF_TARGET_LINUX
     http_test_task(NULL);
 #else
 
     #if !DEBUG_NO_WIFI
-    xTaskCreate(&market_task, "market_task", 8192, NULL, 5, NULL);
     xTaskCreate(&wifi_signal_task, "wifi_signal_task", 2048, NULL, 5, NULL);
+    xTaskCreate(&market_task, "market_task", 8192, NULL, 5, NULL);
     #else
+    snprintf(ip_addr_str, sizeof(ip_addr_str), "127.0.0.1");
+    ui_wifi_ready(ip_addr_str);
     test_display_labels();
     send_init_time();    
     // ui_test_colors();

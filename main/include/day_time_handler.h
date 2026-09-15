@@ -14,7 +14,7 @@
 extern const char* days[NUM_TRADING_DAYS];
 
 int get_day(const char* day_string);
-bool is_after_close(clock_data_t clock_data);
+bool is_market_open(clock_data_t clock_data);
 esp_err_t parse_time(const char* time_string, clock_data_t* clock_data);
 
 #endif

@@ -11,13 +11,14 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include "day_time_handler.h"
 
 #define DISPLAY_WIDTH   240
 #define DISPLAY_HEIGHT  320
 
 #define LVGL_BUFFER_LINES  40
 
-#define NUM_SCREEN_OBJECTS 12
+#define NUM_SCREEN_OBJECTS 15
 
 #define NUM_STOCKS 3 // for now the display only supports 3 different stocks
 
@@ -38,6 +39,9 @@ typedef enum {
     OBJECT_STOCK_PRICE1,
     OBJECT_STOCK_PRICE2,
     OBJECT_STOCK_PRICE3,
+    OBJECT_STOCK_PRICE_CHANGE1,
+    OBJECT_STOCK_PRICE_CHANGE2,
+    OBJECT_STOCK_PRICE_CHANGE3,
     OBJECT_IP_ADDRESS,
     OBJECT_CLOCK,
     OBJECT_CPU_STATS1,
@@ -170,53 +174,85 @@ static void ui_create_start_screen(void)
 
 void ui_wifi_ready(const char *address)
 {   
+    static bool first_update = true;
+
     ESP_LOGI(TAG, "Updating ip address to: %s\n", address);
-
-    lvgl_port_lock(0);
-
-    lv_obj_delete(app_name);
-    lv_obj_delete(preload);
-    lv_obj_delete(wifi_status);
 
     lv_obj_t *ip_address = screen_objects[OBJECT_IP_ADDRESS];
 
+    lvgl_port_lock(0);
+
+    if (first_update) {
+
+        lv_obj_delete(app_name);
+        lv_obj_delete(preload);
+        lv_obj_delete(wifi_status);
+
+
+
+        lv_obj_set_style_text_color(ip_address, lv_color_hex(0xFFFFFF), 0);
+
+        lv_obj_remove_flag(screen_objects[OBJECT_IP_ADDRESS], LV_OBJ_FLAG_HIDDEN);
+        lv_obj_remove_flag(screen_objects[OBJECT_CLOCK], LV_OBJ_FLAG_HIDDEN);
+        lv_obj_remove_flag(screen_objects[OBJECT_CPU_STATS1], LV_OBJ_FLAG_HIDDEN);
+        lv_obj_remove_flag(screen_objects[OBJECT_CPU_STATS2], LV_OBJ_FLAG_HIDDEN);
+        lv_obj_remove_flag(screen_objects[OBJECT_CPU_STATS3], LV_OBJ_FLAG_HIDDEN);
+        lv_obj_remove_flag(screen_objects[OBJECT_WIFI_STATUS], LV_OBJ_FLAG_HIDDEN);
+        
+        first_update = false;
+    }
+
     lv_label_set_text(ip_address, address);
 
-    lv_obj_set_style_text_color(ip_address, lv_color_hex(0xFFFFFF), 0);
-
-    lv_obj_remove_flag(screen_objects[OBJECT_IP_ADDRESS], LV_OBJ_FLAG_HIDDEN);
-    lv_obj_remove_flag(screen_objects[OBJECT_CLOCK], LV_OBJ_FLAG_HIDDEN);
-    lv_obj_remove_flag(screen_objects[OBJECT_CPU_STATS1], LV_OBJ_FLAG_HIDDEN);
-    lv_obj_remove_flag(screen_objects[OBJECT_CPU_STATS2], LV_OBJ_FLAG_HIDDEN);
-    lv_obj_remove_flag(screen_objects[OBJECT_CPU_STATS3], LV_OBJ_FLAG_HIDDEN);
-    lv_obj_remove_flag(screen_objects[OBJECT_WIFI_STATUS], LV_OBJ_FLAG_HIDDEN);
-    
 
     lvgl_port_unlock();
-
 }
 
 void ui_update_market(market_data_t market_data, int stock_idx)
 {
     char price_str[10];
+    char change_str[10];
 
     lv_obj_t *ticker_label = screen_objects[stock_idx];
     lv_obj_t *price_label = screen_objects[stock_idx+NUM_STOCKS];
+    lv_obj_t *change_label = screen_objects[stock_idx+NUM_STOCKS*2];
+    lv_color_t color;
 
     ESP_LOGI(
         TAG,
-        "Updating UI: %s %.2f",
+        "Updating UI: %s %.2f %.2f",
         market_data.ticker,
-        market_data.price
+        market_data.price,
+        market_data.change
     );
 
-    snprintf(price_str, sizeof(price_str), "$%.2f", (double)market_data.price);
+    if (market_data.change > 0) {
+        color = lv_color_hex(0x39bd39);
+    } else {
+        market_data.change *= -1;
+        color = lv_color_hex(0xe36b6b);
+    }
+
+    snprintf(price_str, sizeof(price_str), "$%.2f", market_data.price);
+    snprintf(change_str, sizeof(change_str), "%.2f", market_data.change);
+
 
     lvgl_port_lock(0);
 
     lv_label_set_text(
         price_label,
         price_str
+    );
+
+    lv_label_set_text(
+        change_label,
+        change_str
+    );
+
+    lv_obj_set_style_text_color(
+        change_label,
+        color,
+        LV_PART_MAIN
     );
 
     lv_label_set_text_fmt(
@@ -227,6 +263,7 @@ void ui_update_market(market_data_t market_data, int stock_idx)
 
     lv_obj_remove_flag(ticker_label, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(price_label, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(change_label, LV_OBJ_FLAG_HIDDEN);
 
     lvgl_port_unlock();
     
@@ -280,6 +317,13 @@ void ui_update_cpu(cpu_stats_t cpu_stats)
 void ui_update_clock(clock_data_t clock_data)
 {
     lv_obj_t *clock_obj = screen_objects[OBJECT_CLOCK];
+    lv_color_t color;
+
+    if (is_market_open(clock_data)) {
+        color = lv_color_hex(0x80fff9);
+    } else {
+        color = lv_color_hex(0xffd500);
+    }
 
     lvgl_port_lock(0);
 
@@ -289,6 +333,12 @@ void ui_update_clock(clock_data_t clock_data)
         clock_data.hour,
         clock_data.minute,
         clock_data.second
+    );
+
+    lv_obj_set_style_text_color(
+        clock_obj,
+        color,
+        LV_PART_MAIN
     );
 
     lvgl_port_unlock();
@@ -335,8 +385,9 @@ static void ui_create_objects(void)
     );
 
     int posy = 50;
-    int posx_ticker = 50;
-    int posx_price = 75;
+    int posx_ticker = 40;
+    int posx_price = 45;
+    int posx_price_change = 135;
 
     for (int i = 0; i < NUM_SCREEN_OBJECTS; i++) {
         screen_objects[i] = lv_label_create(screen);
@@ -348,6 +399,9 @@ static void ui_create_objects(void)
 
         lv_obj_set_pos(screen_objects[i], posx_ticker, posy);
         lv_obj_set_pos(screen_objects[i+NUM_STOCKS], posx_price, posy+30);
+        // lv_obj_set_pos(screen_objects[i+NUM_STOCKS*2], posx_price_change, posy+33);
+
+        lv_obj_align(screen_objects[i+NUM_STOCKS*2], LV_ALIGN_TOP_RIGHT, -50, posy+33);
 
         posy += 60;
 
@@ -371,7 +425,19 @@ static void ui_create_objects(void)
 
         lv_obj_set_style_text_color(
             screen_objects[i+NUM_STOCKS],
-            lv_color_hex(0x00FF00),
+            lv_color_hex(0xFFFFFF),
+            LV_PART_MAIN
+        );
+
+        lv_obj_set_style_text_font(
+            screen_objects[i+NUM_STOCKS*2],
+            &lv_font_montserrat_22,
+            LV_PART_MAIN
+        );
+
+        lv_obj_set_style_text_color(
+            screen_objects[i+NUM_STOCKS*2],
+            lv_color_hex(0xFFFFFF),
             LV_PART_MAIN
         );
     }
@@ -433,12 +499,6 @@ static void ui_process_message(void)
 
     while (xQueueReceive(ui_queue, &ui_message, 0) == pdTRUE) {
 
-        // ESP_LOGI(
-        //     TAG,
-        //     "Got message of type: %d\n",
-        //     ui_message.message_type
-        // );
-
         switch (ui_message.message_type) {
             case UI_MSG_MARKET:
                 ui_update_market(ui_message.market_data, stock_idx);
@@ -455,6 +515,10 @@ static void ui_process_message(void)
 
             case UI_MSG_WIFI_STATUS:
                 ui_update_wifi_status(ui_message.wifi_data);
+                break;
+
+            case UI_MSG_WIFI_CONNECT:
+                ui_wifi_ready(ui_message.ip_addr);
                 break;
 
             default:

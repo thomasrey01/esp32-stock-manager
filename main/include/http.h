@@ -13,7 +13,7 @@
 
 #include "esp_log.h"
 
-#define MAX_HTTP_RECV_BUFFER 512
+#define MAX_HTTP_RECV_BUFFER 4096
 #define MAX_HTTP_OUTPUT_BUFFER 2048
 
 esp_err_t https_with_hostname_path(const char* host, const char* path);

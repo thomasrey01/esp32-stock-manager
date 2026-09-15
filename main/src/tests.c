@@ -14,10 +14,10 @@ void test_time_parse()
 
     clock_data_t clock_data;
 
-    const char * str1 = "22:44:34.103825+02:00"; // true
-    const char * str2 = "16:44:34.103825+02:00"; // true
-    const char * str3 = "17:01:34.103825+02:00"; // true
-    const char * str4 = "2026-08-26T16:01:34.103825+02:00"; // false
+    const char * str1 = "15:44:34.103825+02:00"; // true
+    const char * str2 = "9:44:34.103825+02:00"; // true
+    const char * str3 = "12:01:34.103825+02:00"; // true
+    const char * str4 = "2026-08-26T16:01:34.103825+02:00"; // true
     const char * str5 = "2026-08-26T01:44:34.103825+02:00"; // false
     const char* str6 = "T1"; // false
 
@@ -30,7 +30,7 @@ void test_time_parse()
                 clock_data.second
         );
 
-    ESP_LOGI(TAG, "test1: %d\n", is_after_close(clock_data));
+    ESP_LOGI(TAG, "test1: %d\n", is_market_open(clock_data));
     parse_time(str2, &clock_data);
 
     ESP_LOGI(TAG, "Current time: %d:%d:%d\n", 
@@ -39,15 +39,15 @@ void test_time_parse()
                 clock_data.second
         );
 
-    ESP_LOGI(TAG, "test2: %d\n", is_after_close(clock_data));
+    ESP_LOGI(TAG, "test2: %d\n", is_market_open(clock_data));
     parse_time(str3, &clock_data);
-    ESP_LOGI(TAG, "test3: %d\n", is_after_close(clock_data));
+    ESP_LOGI(TAG, "test3: %d\n", is_market_open(clock_data));
     parse_time(str4, &clock_data);
-    ESP_LOGI(TAG, "test4: %d\n", is_after_close(clock_data));
+    ESP_LOGI(TAG, "test4: %d\n", is_market_open(clock_data));
     parse_time(str5, &clock_data);
-    ESP_LOGI(TAG, "test5: %d\n", is_after_close(clock_data));
+    ESP_LOGI(TAG, "test5: %d\n", is_market_open(clock_data));
     parse_time(str6, &clock_data);
-    ESP_LOGI(TAG, "test6: %d\n", is_after_close(clock_data));
+    ESP_LOGI(TAG, "test6: %d\n", is_market_open(clock_data));
 }
 
 void test_display_labels()

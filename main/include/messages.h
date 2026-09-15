@@ -25,6 +25,7 @@ typedef enum {
     UI_MSG_MARKET,
     UI_MSG_CPU,
     UI_MSG_WIFI_STATUS,
+    UI_MSG_WIFI_CONNECT
 } ui_message_type_t;
 
 typedef struct ui_message {
@@ -35,6 +36,7 @@ typedef struct ui_message {
         cpu_stats_t cpu_stats;
         market_data_t market_data;
         int8_t wifi_data;
+        char ip_addr[16];
     };
 } ui_message_t;
 
